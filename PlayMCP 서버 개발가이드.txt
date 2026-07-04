@@ -1,0 +1,114 @@
+# PlayMCP 서버 개발가이드
+
+*Update Date : 2026.06.12*
+
+⚠️ MCP 서버가 아래 조건을 충족하지 않을 경우 심사 단계에서 반려될 수 있습니다. 
+
+# **1. PlayMCP 서버 생성 조건**
+
+**MCP 서버 생성 시 아래 사항을 준수해야 합니다.**
+
+1. MCP 서버는 최소 지원버전: 2025-03-26, 최대 지원버전: 2025-11-25 을 만족해야 합니다. MCP 스펙 문서
+    - Streamable HTTP 방식만 지원합니다. MCP 전송스펙 문서
+    - Remote MCP 서버만 지원합니다. MCP 서버는 공개된 URL로 접근 가능한 도메인이어야 합니다.
+    - Stateless MCP 서버를 권장합니다. (no session)
+    - 사용자 인증이 필요한 경우, OAuth 인증 혹은 커스텀 헤더 방식을 지원해야 합니다. MCP 인증스펙 문서
+2. MCP Inspector로 MCP 표준 스펙을 준수하고 있는지 사전 점검해야 합니다. MCP Inspector 설치
+3. MCP 서버 생성 시에는 활발하게 운영되는 SDK를 사용하거나 참조해야 합니다. SDK 목록 보기
+4. MCP Server Name 또는 Tool Name에 "kakao"를 prefix 또는 suffix 로 사용할 수 없습니다. 
+    - 대소문자 구분 없이 prefix, suffix, 중간에 포함 모두 불가합니다.
+
+---
+
+# 2. PlayMCP Tool 구성
+
+**Tools 구성시 아래 필수/권장 규칙을 준수해야 합니다.**
+
+1. **툴 이름**
+    
+    툴 이름은 아래 조건을 만족해야 합니다.
+    
+    - 최소 1 글자, 최대 128 글자
+    - 영어 대소문자(A-Z,a-z), 숫자(0-9), _(underscore), -(hyphen)만 허용
+    - 중복된 툴 이름이 존재해서는 안 됩니다.
+    - 대소문자가 구분됩니다.(Case-sensitive)
+        - ex. getInfo 는 GetInfo와 구분됩니다.
+2. **툴 개수**
+    - MCP 서버당 툴의 개수가 가능한 20개를 초과 금지하며, 3개~10개를 권장합니다.
+        - 툴의 개수가 과도하게 많아질 경우 LLM의 툴콜 발생 확률을 낮춥니다.
+3. **반드시 포함시켜야 할 property 목록**
+    - name, description, inputSchema, annotations
+    - annotations는 title, readOnlyHint, destructiveHint, openWorldHint, idempotentHint 모두 값 지정해야 합니다.
+4. **description 작성시 유의사항**
+    - description은 가능한 영문 작성을 권장합니다.
+    - description에 MCP 명(서비스 이름)을 포함해야 합니다.
+    - 서비스 이름은 고유명사로서 영문, 국문을 병기하여 표기합니다.
+        
+        *예시 : Retrieves a list of the current most popular or trending songs from Melon(멜론)*
+        
+    - description은 1,024자 이내로 작성합니다.
+        - 너무 긴 description은 툴 호출에 오히려 불리할 뿐더러 다른 툴 호출에도 영향을 줍니다.
+
+1. **권장 규칙**
+    - Kakao Tools에 툴이 반영될 때 카카오는 tool name에 PlayMCP에서 지정한 prefix가 name에 자동으로 포함되도록 처리합니다.
+        - 따라서 tool name에 MCP명을 포함시킬 필요가 없습니다.
+
+<image> 
+
+✦ 캡쳐 화면의 서비스 경로 : PlayMCP → 개발자 콘솔 → 새로운 MCP서버 등록 → MCP 식별자
+
+- result의 크기는 최소한으로 구성해야 합니다.
+- tool call result가 error인 경우와 widget json이 아닌 경우에는 text content에 정제된 텍스트 형식(ex. 마크다운 형식)을 권장하며, API 응답을 그대로 사용하는 것을 지양해 주세요. API 응답을 그대로 사용하게 되면 불필요한 데이터가 많아 좋은 답변이 나오기 어렵습니다.
+
+---
+
+# 3. OAuth 인증
+
+**개인정보가 담긴 OAuth 인증 제공 시, 아래 사항을 준수해야 합니다.**
+
+1. 기본 정책
+    - MCP를 등록하신 후 OAuth Client에 Redirect URI를 설정해주세요.
+    - https://playmcp.kakao.com/api/v1/applied-mcps/**{mcpId}**/authorize/oauth:callback
+    - mcpId는 등록하신 MCP의 id로 변경 후 설정해 주세요.
+        
+        ex)https://playmcp.kakao.com/mcp/3 인 경우 mcpId는 “3”임
+        
+    - 개인정보를 카카오로 전달하는 것에 대해 사용자에게 ‘개인정보 제3자 제공 동의’를 받는 화면을 구성하는 것을 권장합니다.
+    
+    **[첨부. 개인정보 제3자 제공 동의문 양식]**
+    
+    <aside>
+    
+    **제공받는자**
+    
+    (주) 카카오
+    
+    **제공목적**
+    
+    000 서비스 제공을 위한 PlayMCP 연동 및 관리, 서비스 호출 및 응답 처리, 서비스 품질 향상 및 개선, 고객 문의 대응
+    
+    **제공항목**
+    
+    PlayMCP 연동을 위한 인증 정보, (그 외 제공자가 기재하는 내용)
+    
+    **제공 받는 자의 보유 및 이용기간**
+    
+    연동 해제 시 지체없이 파기
+    
+    </aside>
+    
+    *** 제공받는자, 제공 목적, 제공받는 자의 보유기간은 강조 표기**
+    
+
+1. **OAuth 인증서버 구성을 위한 기본 가이드**
+    - MCP 서버가 인증을 지원하는 경우, 표준 OAuth 인증 스펙을 따라야 합니다.
+    - MCP 인증스펙 문서를 참고하여, 전체 플로우를 구현합니다.
+
+---
+
+# 4. 서버 운영 고려 사항
+
+**MCP 서버 운영시 고려할 사항을 가이드 드립니다.** 
+
+- 툴의 응답속도는 평균 100ms 이내, p99 3,000ms 필수입니다.
+- 툴의 답변이 광고를 노출하도록 유도해서는 안됩니다.
