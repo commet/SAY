@@ -3,25 +3,30 @@ import { classifyNotice, titles } from "./classify.js";
 import { evidenceGate } from "./evidenceGate.js";
 import { parseDateTime, patternExtract } from "./patternExtract.js";
 import { detectRiskSignals } from "./riskRules.js";
+import { sanitizeNoticeText } from "./privacy.js";
 import { checklists } from "../data/checklists.js";
 import type { ExtractedInput, Fact, NoticeCard, NoticeType } from "./types.js";
 
 export interface AnalyzeArgs { raw_text: string; notice_type_guess?: NoticeType; extracted?: ExtractedInput[]; sender_hint?: string; }
 
 export function buildCard(args: AnalyzeArgs, now = new Date()): NoticeCard {
-  const noticeType = classifyNotice(args.raw_text, args.notice_type_guess);
+  const rawText = sanitizeNoticeText(args.raw_text);
+  const senderHint = args.sender_hint ? sanitizeNoticeText(args.sender_hint) : undefined;
+  const noticeType = classifyNotice(rawText, args.notice_type_guess);
   const fields = checklists[noticeType];
   const byKey = new Map(fields.map((x) => [x.fieldKey, x]));
-  const facts = patternExtract(args.raw_text, noticeType);
+  const facts = patternExtract(rawText, noticeType).map(({ quote: _quote, ...fact }) => fact);
   for (const item of args.extracted ?? []) {
     const meta = byKey.get(item.field_key);
-    const fact: Fact = { fieldKey: item.field_key, label: meta?.label ?? item.field_key.replaceAll("_", " "), value: item.value, confidence: evidenceGate(args.raw_text, item.value, item.quote), quote: item.quote?.slice(0, 120) };
+    const value = sanitizeNoticeText(item.value);
+    const quote = item.quote ? sanitizeNoticeText(item.quote) : undefined;
+    const fact: Fact = { fieldKey: item.field_key, label: meta?.label ?? item.field_key.replaceAll("_", " "), value, confidence: evidenceGate(rawText, value, quote) };
     const index = facts.findIndex((x) => x.fieldKey === fact.fieldKey);
     if (index >= 0) { if (fact.confidence === "confirmed") facts[index] = fact; } else facts.push(fact);
   }
   const confirmedKeys = new Set(facts.filter((x) => x.confidence === "confirmed").map((x) => x.fieldKey));
   const missingFields = fields.filter((x) => x.required && !confirmedKeys.has(x.fieldKey)).map((x) => ({ fieldKey: x.fieldKey, label: x.label, whyItMatters: x.whyItMatters, suggestedQuestion: x.suggestedQuestion }));
-  if (noticeType === "hospital" && /수면내시경/.test(args.raw_text) && !confirmedKeys.has("guardian_needed")) {
+  if (noticeType === "hospital" && /수면내시경/.test(rawText) && !confirmedKeys.has("guardian_needed")) {
     const x = fields.find((f) => f.fieldKey === "guardian_needed")!;
     missingFields.push({ fieldKey: x.fieldKey, label: x.label, whyItMatters: x.whyItMatters, suggestedQuestion: x.suggestedQuestion });
   }
@@ -34,5 +39,5 @@ export function buildCard(args: AnalyzeArgs, now = new Date()): NoticeCard {
     return { atLabel: iso ? new Date(Date.parse(iso) - 10 * 60_000).toISOString() : `${fact.value} 직전`, text: meta.reminderText! };
   });
   const candidates = [...actionItems.map((x) => x.dueAt), ...reminders.map((x) => /^\d{4}-/.test(x.atLabel) ? x.atLabel : undefined)].filter((x): x is string => Boolean(x)).sort();
-  return { code: cardCode(args.raw_text), noticeType, title: titles[noticeType], facts, actionItems, missingFields, riskSignals: detectRiskSignals(args.raw_text, args.sender_hint), reminderSuggestions: reminders, nextCheckAt: candidates[0], createdAt: now.toISOString(), lastAccessAt: now.toISOString() };
+  return { code: cardCode(), noticeType, title: titles[noticeType], facts, actionItems, missingFields, riskSignals: detectRiskSignals(rawText, senderHint), reminderSuggestions: reminders, nextCheckAt: candidates[0], createdAt: now.toISOString(), lastAccessAt: now.toISOString() };
 }

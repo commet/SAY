@@ -1,6 +1,7 @@
 import { buildCard, type AnalyzeArgs } from "../core/cardBuilder.js";
 import { normalizeCode } from "../core/cardCode.js";
 import { detectRiskSignals } from "../core/riskRules.js";
+import { safeActorRole, sanitizeNoticeText } from "../core/privacy.js";
 import { store } from "../core/store.js";
 import type { ItemStatus } from "../core/types.js";
 import { makeMessage, type Audience, type Style } from "../data/messageTemplates.js";
@@ -13,14 +14,14 @@ export function analyzeNotice(args: AnalyzeArgs, now = new Date()): string {
   if (card.noticeType === "other" && card.facts.length === 0) return `안내문으로 보이지 않아요. 문자 전체나 캡처의 모든 글자를 보내주시면 카드로 만들어 드려요.\n\n${HOST_HINT}`;
   store.put(card); return renderCard(card, now);
 }
-export function scamSignals(rawText: string, senderHint?: string): string { return renderRisks(detectRiskSignals(rawText, senderHint)); }
+export function scamSignals(rawText: string, senderHint?: string): string { return renderRisks(detectRiskSignals(sanitizeNoticeText(rawText), senderHint ? sanitizeNoticeText(senderHint) : undefined)); }
 export function getCard(code: string, now = new Date()): string { const normalized = normalizeCode(code); const card = store.get(normalized); if (!card) return missingCard(normalized); store.touch(card, now); return renderCard(card, now); }
 export function updateStatus(code: string, itemLabel: string | undefined, itemId: string | undefined, status: ItemStatus, actorName?: string, now = new Date()): string {
   const normalized = normalizeCode(code); const card = store.get(normalized); if (!card) return missingCard(normalized);
   if (!itemLabel && !itemId) return `바꿀 항목의 이름(item_label)이나 항목 ID(item_id)가 필요해요.\n\n${HOST_HINT}`;
   const matches = card.actionItems.filter((x) => itemId ? x.id.toLowerCase() === itemId.toLowerCase() : x.label.includes(itemLabel!));
   if (matches.length !== 1) return `다음 중 어느 항목인가요? 항목 이름을 조금 더 구체적으로 알려 주세요.\n${card.actionItems.map((x) => `- ${x.label}`).join("\n")}\n\n${HOST_HINT}`;
-  const item = matches[0]; item.status = status; item.actorName = actorName?.trim() || undefined;
+  const item = matches[0]; item.status = status; item.actorName = safeActorRole(actorName);
   const last = item.history.at(-1); if (last?.status !== status || last.actorName !== item.actorName) item.history.push({ at: now.toISOString(), status, actorName: item.actorName });
   store.touch(card, now); return renderCard(card, now);
 }

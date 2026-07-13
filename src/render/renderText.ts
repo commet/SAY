@@ -34,4 +34,4 @@ export function renderCard(card: NoticeCard, now = new Date()): string {
   return `${out}\n\n${HOST_HINT}`;
 }
 
-export function missingCard(code: string): string { return `${code} 카드를 찾지 못했어요. 카드가 7일 뒤 만료되었거나 코드에 오타가 있을 수 있어요. 원문을 다시 보내며 "카드로 만들어줘"라고 해 주세요.\n\n${HOST_HINT}`; }
+export function missingCard(code: string): string { return `${code} 카드를 찾지 못했어요. 카드가 24시간 안에 만료되었거나 서버가 재시작됐거나 코드에 오타가 있을 수 있어요. 원문에서 개인정보를 가린 뒤 다시 보내며 "카드로 만들어줘"라고 해 주세요.\n\n${HOST_HINT}`; }

@@ -17,11 +17,15 @@ describe("classification and cards", () => {
   it("classifies the three submission scenarios", () => {
     expect(classifyNotice(hospital)).toBe("hospital"); expect(classifyNotice(government)).toBe("government"); expect(classifyNotice(smishing)).toBe("delivery_or_smishing");
   });
-  it("creates deterministic card codes and preserves privacy", () => {
+  it("creates unguessable-format card codes and preserves privacy", () => {
     const card = buildCard({ raw_text: hospital }, fixedNow);
-    expect(card.code).toBe(cardCode(hospital)); expect(card).not.toHaveProperty("rawText");
+    expect(card.code).toMatch(/^SAY-[A-Z2-9]{4}-[A-Z2-9]{4}-[A-Z2-9]{4}$/); expect(card).not.toHaveProperty("rawText");
     expect(card.facts.some((x) => x.fieldKey === "appointment_date")).toBe(true);
     expect(card.missingFields.map((x) => x.fieldKey)).toContain("medication_allowed");
+  });
+  it("generates a different bearer code for each card", () => {
+    const codes = new Set(Array.from({ length: 100 }, () => cardCode()));
+    expect(codes.size).toBe(100);
   });
   it("extracts government required facts", () => {
     const keys = buildCard({ raw_text: government }, fixedNow).facts.map((x) => x.fieldKey);

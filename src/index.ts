@@ -8,7 +8,7 @@ await store.load();
 const app = express();
 app.disable("x-powered-by");
 app.use(express.json({ limit: "1mb" }));
-app.get("/health", (_req, res) => res.json({ ok: true, name: "say-family-notice", version: "0.1.0" }));
+app.get("/health", (_req, res) => res.json({ ok: true, name: "say-family-notice", version: "0.2.0" }));
 app.post("/mcp", async (req, res) => {
   try {
     if (!isInitializeRequest(req.body) && !req.body?.method) { res.status(400).json({ jsonrpc: "2.0", error: { code: -32600, message: "Invalid MCP request" }, id: null }); return; }

@@ -1,9 +1,8 @@
-import { createHash } from "node:crypto";
-import { normalize } from "./evidenceGate.js";
+import { randomBytes } from "node:crypto";
 const alphabet = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
-export function cardCode(rawText: string, salt = ""): string {
-  const bytes = createHash("sha256").update(normalize(rawText) + salt).digest();
-  return `SAY-${Array.from(bytes.subarray(0, 6), (b) => alphabet[b % alphabet.length]).join("")}`;
+export function cardCode(): string {
+  const compact = Array.from(randomBytes(12), (byte) => alphabet[byte & 31]).join("");
+  return `SAY-${compact.slice(0, 4)}-${compact.slice(4, 8)}-${compact.slice(8)}`;
 }
 export function normalizeCode(value: string): string {
   const cleaned = value.trim().toUpperCase().replace(/\s/g, "");
