@@ -11,7 +11,7 @@ import { createCase, deleteCase, inspectNotice, recordOutcome } from "../src/too
 import { hospital } from "./fixtures.js";
 
 const passedEvaluation: EvaluationResult = {
-  metrics: { corpusCases: 24, classificationAccuracyPercent: 100, expectedFieldRecallPercent: 100, expectedRiskRecallPercent: 100, piiRedactionChecks: 11, piiLeaks: 0, retainedQuoteFields: 0 },
+  metrics: { corpusCases: 40, classificationAccuracyPercent: 100, expectedFieldRecallPercent: 100, expectedRiskRecallPercent: 100, riskPrecisionPercent: 100, unexpectedRiskSignals: 0, lowConfidenceClassifications: 8, highConfidenceMisclassifications: 0, classificationByType: {}, piiRedactionChecks: 24, piiLeaks: 0, retainedQuoteFields: 0 },
   failures: [],
   passed: true,
 };
@@ -19,7 +19,7 @@ const feedback: OutcomeFeedback = {
   outcome: "resolved", classificationQuality: "correct", extractionQuality: "complete",
   riskQuality: "appropriate", friction: "none", recordedAt: "2026-07-13T00:00:00.000Z",
 };
-const cardCodeFrom = (text: string) => text.match(/SAY-[A-Z2-9]{4}-[A-Z2-9]{4}-[A-Z2-9]{4}/)?.[0];
+const cardCodeFrom = (text: string) => text.match(/SAY-(?:[A-Z2-9]{4}-){3}[A-Z2-9]{4}/)?.[0];
 
 describe("bounded self-improvement loop", () => {
   it("aggregates only low-cardinality structured counters", () => {
@@ -79,7 +79,7 @@ describe("bounded self-improvement loop", () => {
   it("promotes privacy regressions immediately to a critical release blocker", () => {
     const failed: EvaluationResult = {
       metrics: { ...passedEvaluation.metrics, piiLeaks: 1 }, passed: false,
-      failures: [{ id: "privacy-case", missingFields: [], missingRisks: [], piiLeakCount: 1, retainedQuoteCount: 0 }],
+      failures: [{ id: "privacy-case", missingFields: [], missingRisks: [], unexpectedRisks: [], forbiddenFieldsFound: [], piiLeakCount: 1, retainedQuoteCount: 0 }],
     };
     const report = buildImprovementReport(emptyFeedbackSummary(), failed);
     expect(report.candidates[0]).toEqual(expect.objectContaining({ id: "regression:privacy", priority: "critical" }));
@@ -95,6 +95,7 @@ describe("bounded self-improvement loop", () => {
       const args = { outcome: "resolved" as const, classificationQuality: "correct" as const, extractionQuality: "complete" as const, riskQuality: "appropriate" as const, friction: "none" as const };
       const first = JSON.parse(recordOutcome(code, args, 1));
       expect(first).toEqual(expect.objectContaining({ recorded: true, duplicate_ignored: false, case_version: 2 }));
+      expect(first.improvement_signal).toEqual(expect.objectContaining({ minimum_anonymous_support: 5, automatic_code_changes: false }));
       expect(JSON.stringify(first)).not.toContain(code);
       const replay = JSON.parse(recordOutcome(code, args, 1));
       expect(replay).toEqual(expect.objectContaining({ duplicate_ignored: true, case_version: 2 }));

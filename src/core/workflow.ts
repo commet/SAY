@@ -4,8 +4,8 @@ const terminal = new Set(["done", "not_applicable"]);
 
 export function deriveCaseStatus(card: NoticeCard): CaseStatus {
   if (card.actionItems.length > 0 && card.actionItems.every((item) => terminal.has(item.status))) return "completed";
-  const verification = card.actionItems.find((item) => item.kind === "verify_source");
-  if (verification && !terminal.has(verification.status)) return "needs_confirmation";
+  const gate = card.actionItems.find((item) => ["verify-source", "confirm-type"].includes(item.id) && item.status !== "done");
+  if (gate) return "needs_confirmation";
   const open = card.actionItems.filter((item) => !terminal.has(item.status));
   if (open.length && open.every((item) => item.status === "on_hold")) return "blocked";
   if (card.actionItems.some((item) => item.status !== "unchecked")) return "in_progress";
@@ -15,7 +15,8 @@ export function deriveCaseStatus(card: NoticeCard): CaseStatus {
 function dependenciesMet(item: ActionItem, card: NoticeCard): boolean {
   return (item.dependsOn ?? []).every((id) => {
     const dependency = card.actionItems.find((candidate) => candidate.id === id);
-    return dependency ? terminal.has(dependency.status) : false;
+    if (!dependency) return false;
+    return ["verify-source", "confirm-type"].includes(dependency.id) ? dependency.status === "done" : terminal.has(dependency.status);
   });
 }
 

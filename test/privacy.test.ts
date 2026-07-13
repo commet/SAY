@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildCard } from "../src/core/cardBuilder.js";
-import { safeActorRole, sanitizeNoticeText } from "../src/core/privacy.js";
+import { inspectPrivacy, mergePrivacySummaries, safeActorRole, sanitizeNoticeText } from "../src/core/privacy.js";
 import { fixedNow } from "./fixtures.js";
 
 describe("server-side privacy", () => {
@@ -31,6 +31,41 @@ describe("server-side privacy", () => {
     expect(serialized).not.toContain("홍길동");
     expect(serialized).not.toContain("010-1234-5678");
     expect(card.facts.every((fact) => fact.quote === undefined)).toBe(true);
+  });
+
+  it("redacts sensitive URL components while retaining only the host for safety checks", () => {
+    const inspected = inspectPrivacy("https://user:pass@example.com/person/HONG123?token=secret#account");
+    expect(inspected.redactedText).toBe("https://example.com/[경로숨김]?[쿼리숨김]#[조각숨김]");
+    expect(inspected.summary.findings).toEqual(expect.arrayContaining([
+      { kind: "url_credentials", count: 1 }, { kind: "url_path", count: 1 },
+      { kind: "url_query", count: 1 }, { kind: "url_fragment", count: 1 },
+    ]));
+  });
+
+  it("redacts labeled identity, device identifiers, UUIDs, and bidi controls", () => {
+    const input = [
+      "이름: 홍길동", "생년월일: 1990-01-02", "여권번호: M12345678", "123-45-67890",
+      "기기 ID: DEVICE-TOKEN-12345", "550e8400-e29b-41d4-a716-446655440000", "안내\u202Etxt.exe",
+      "인증번호: 839201 입력 요청",
+      "서울 중구 세종대로 110", "우편번호: 04524", "공동현관 비밀번호: 1234#", "12가 3456", "보험증권번호: ABCD-123456",
+    ].join("\n");
+    const inspected = inspectPrivacy(input);
+    for (const secret of ["홍길동", "1990-01-02", "M12345678", "123-45-67890", "DEVICE-TOKEN-12345", "550e8400-e29b-41d4-a716-446655440000", "839201", "세종대로 110", "04524", "1234#", "12가 3456", "ABCD-123456", "\u202E"]) {
+      expect(inspected.redactedText).not.toContain(secret);
+    }
+    expect(inspected.summary.total).toBeGreaterThanOrEqual(13);
+  });
+
+  it("never reintroduces an OTP through stored risk evidence", () => {
+    const card = buildCard({ raw_text: "보험료 안내\n인증번호: 839201 입력 요청" }, fixedNow);
+    expect(card.riskSignals.map((risk) => risk.ruleId)).toContain("R4");
+    expect(JSON.stringify(card)).not.toContain("839201");
+  });
+
+  it("combines raw notice and sender privacy counts without retaining values", () => {
+    const merged = mergePrivacySummaries(inspectPrivacy("홍길동님").summary, inspectPrivacy("010-1234-5678").summary);
+    expect(merged.total).toBe(2);
+    expect(merged.findings.map((finding) => finding.kind)).toEqual(["person_name", "phone"]);
   });
 
   it("stores only generic actor roles", () => {

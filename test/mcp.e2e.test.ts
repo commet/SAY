@@ -16,7 +16,7 @@ describe("MCP protocol E2E", () => {
     await client.connect(clientTransport);
     cleanups.push(async () => { await client.close(); await server.close(); });
 
-    expect(client.getServerVersion()).toEqual(expect.objectContaining({ name: "SAY", version: "1.1.0" }));
+    expect(client.getServerVersion()).toEqual(expect.objectContaining({ name: "SAY", version: "2.0.0" }));
     const tools = await client.listTools();
     expect(tools.tools.map((tool) => tool.name)).toEqual([
       "inspect_notice", "create_case", "check_scam_signals", "get_case", "get_next_action",
@@ -29,6 +29,7 @@ describe("MCP protocol E2E", () => {
       expect(tool.description).toContain("SAY(사이)");
       expect(tool.description!.length).toBeLessThanOrEqual(1024);
       expect(tool.inputSchema).toBeDefined();
+      expect(tool.outputSchema).toBeDefined();
       expect(tool.annotations).toEqual(expect.objectContaining({
         title: expect.any(String), readOnlyHint: expect.any(Boolean), destructiveHint: expect.any(Boolean),
         openWorldHint: expect.any(Boolean), idempotentHint: expect.any(Boolean),
@@ -39,13 +40,14 @@ describe("MCP protocol E2E", () => {
     expect(tools.tools.find((tool) => tool.name === "delete_case")?.annotations?.destructiveHint).toBe(true);
 
     const inspected = await client.callTool({ name: "inspect_notice", arguments: { raw_text: hospital } });
+    expect(inspected.structuredContent).toEqual(expect.objectContaining({ ok: true, message: expect.any(String), data: expect.any(Object) }));
     const inspectionText = "content" in inspected && inspected.content[0]?.type === "text" ? inspected.content[0].text : "";
     const inspection = JSON.parse(inspectionText);
     expect(inspection.inspection_token).toMatch(/^INSP-/);
 
     const created = await client.callTool({ name: "create_case", arguments: { inspection_token: inspection.inspection_token, consent: true } });
     const createdText = "content" in created && created.content[0]?.type === "text" ? created.content[0].text : "";
-    const code = createdText.match(/SAY-[A-Z2-9]{4}-[A-Z2-9]{4}-[A-Z2-9]{4}/)?.[0];
+    const code = createdText.match(/SAY-(?:[A-Z2-9]{4}-){3}[A-Z2-9]{4}/)?.[0];
     expect(code).toBeTruthy();
     const previousLogging = process.env.IMPROVEMENT_EVENT_LOG;
     process.env.IMPROVEMENT_EVENT_LOG = "false";
@@ -61,6 +63,7 @@ describe("MCP protocol E2E", () => {
     }
     const outcomeText = "content" in outcome && outcome.content[0]?.type === "text" ? outcome.content[0].text : "";
     expect(JSON.parse(outcomeText)).toEqual(expect.objectContaining({ recorded: true, duplicate_ignored: false }));
+    expect(outcome.structuredContent).toEqual(expect.objectContaining({ ok: true, data: expect.objectContaining({ recorded: true }) }));
     await client.callTool({ name: "delete_case", arguments: { case_code: code } });
   });
 });

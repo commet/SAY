@@ -4,8 +4,9 @@ import { inspectNotice, type InspectArgs } from "../core/inspectNotice.js";
 import { inspectionStore } from "../core/inspectionStore.js";
 import { feedbackStore } from "../core/feedbackStore.js";
 import { makeImprovementEvent } from "../core/feedbackEvent.js";
+import { MIN_FEEDBACK_SUPPORT } from "../core/improvementReport.js";
 import { detectRiskSignals } from "../core/riskRules.js";
-import { safeActorRole, sanitizeNoticeText } from "../core/privacy.js";
+import { safeActorRole } from "../core/privacy.js";
 import { store } from "../core/store.js";
 import type { CaseOutcome, ClassificationQuality, ExtractionQuality, ItemStatus, NoticeType, OutcomeFeedback, RiskQuality, WorkflowFriction } from "../core/types.js";
 import { deriveCaseStatus, nextBestAction } from "../core/workflow.js";
@@ -26,11 +27,12 @@ export function createCase(inspectionToken: string, consent: boolean, now = new 
   if (!consent) return `저장 동의가 확인되지 않아 케이스를 만들지 않았어요. 먼저 inspect_notice의 마스킹 결과를 사용자에게 보여주세요.\n\n${HOST_HINT}`;
   const inspection = inspectionStore.take(inspectionToken, now);
   if (!inspection) return `검사 토큰이 없거나 10분이 지나 만료됐어요. 원문으로 inspect_notice를 다시 실행해 주세요.\n\n${HOST_HINT}`;
-  const card = buildCard({ raw_text: inspection.redactedText, notice_type_guess: inspection.noticeType, sender_hint: inspection.senderHint, privacy_summary: inspection.privacySummary, source_assessment: inspection.sourceAssessment }, now);
+  const card = buildCard({ raw_text: inspection.redactedText, notice_type_guess: inspection.noticeType, sender_hint: inspection.senderHint, privacy_summary: inspection.privacySummary, source_assessment: inspection.sourceAssessment, classification_assessment: inspection.classification, risk_signals: inspection.riskSignals }, now);
+  if (card.noticeType === "other" && card.facts.length === 0) return `행동 케이스로 만들 정보가 부족해 저장하지 않았어요. 안내문 전체를 보내 다시 검사해 주세요.\n\n${HOST_HINT}`;
   store.put(card);
   return renderCard(card, now);
 }
-export function scamSignals(rawText: string, senderHint?: string): string { return renderRisks(detectRiskSignals(sanitizeNoticeText(rawText), senderHint ? sanitizeNoticeText(senderHint) : undefined)); }
+export function scamSignals(rawText: string, senderHint?: string): string { return renderRisks(detectRiskSignals(rawText, senderHint)); }
 export function getCard(code: string, now = new Date()): string { const normalized = normalizeCode(code); const card = store.get(normalized); return card ? renderCard(card, now) : missingCard(normalized); }
 export function getNextAction(code: string): string { const normalized = normalizeCode(code); const card = store.get(normalized); return card ? nextBestAction(card) : missingCard(normalized); }
 export function updateStatus(code: string, itemLabel: string | undefined, itemId: string | undefined, status: ItemStatus, actorName?: string, expectedVersion?: number, now = new Date()): string {
@@ -44,14 +46,20 @@ export function updateStatus(code: string, itemLabel: string | undefined, itemId
   // expected_version is now stale. This keeps the advertised mutation idempotent.
   if (last?.status === status && last.actorName === role) return renderCard(card, now);
   if (expectedVersion !== undefined && expectedVersion !== card.version) return `다른 가족이 먼저 케이스를 수정했어요. 현재 버전은 ${card.version}입니다. get_case로 다시 확인한 뒤 업데이트해 주세요.\n\n${HOST_HINT}`;
-  const unmet = (item.dependsOn ?? []).filter((dependencyId) => !["done", "not_applicable"].includes(card.actionItems.find((candidate) => candidate.id === dependencyId)?.status ?? "unchecked"));
+  if (["verify-source", "confirm-type"].includes(item.id) && status === "not_applicable") return `안전 확인 항목은 '해당 없음'으로 건너뛸 수 없어요. 공식 채널 또는 안내 종류를 확인한 뒤 완료로 표시해 주세요.\n\n${HOST_HINT}`;
+  const unmet = (item.dependsOn ?? []).filter((dependencyId) => {
+    const dependency = card.actionItems.find((candidate) => candidate.id === dependencyId);
+    return !dependency || (["verify-source", "confirm-type"].includes(dependency.id) ? dependency.status !== "done" : !["done", "not_applicable"].includes(dependency.status));
+  });
   if (unmet.length && !["unchecked", "on_hold", "not_applicable"].includes(status)) return `선행 확인(${unmet.join(", ")})이 끝나기 전에는 이 항목을 진행할 수 없어요. 먼저 get_next_action을 확인해 주세요.\n\n${HOST_HINT}`;
   const previousCaseStatus = card.status; item.status = status; item.actorName = role;
   item.history.push({ at: now.toISOString(), status, actorName: role });
+  item.history = item.history.slice(-20);
   card.version += 1;
   card.events.push({ at: now.toISOString(), type: "action_updated", detail: `${item.id}:${status}` });
   card.status = deriveCaseStatus(card);
   if (card.status !== previousCaseStatus) card.events.push({ at: now.toISOString(), type: "status_changed", detail: `${previousCaseStatus}->${card.status}` });
+  card.events = card.events.slice(-50);
   store.touch(card, now); return renderCard(card, now);
 }
 export function familyMessage(code: string, audience: Audience, style: Style): string { const normalized = normalizeCode(code); const card = store.get(normalized); return card ? makeMessage(card, audience, style) : missingCard(normalized); }
@@ -109,8 +117,10 @@ export function recordOutcome(code: string, feedback: RecordOutcomeArgs, expecte
   card.outcomeFeedback = recorded;
   card.version += 1;
   card.events.push({ at: now.toISOString(), type: "outcome_recorded", detail: feedback.outcome });
+  card.events = card.events.slice(-50);
   store.touch(card, now);
-  feedbackStore.record(card.noticeType, recorded, now);
+  const feedbackSummary = feedbackStore.record(card.noticeType, recorded, now);
+  const segmentSupport = feedbackSummary.byNoticeType[card.noticeType]?.total ?? 0;
 
   if (process.env.IMPROVEMENT_EVENT_LOG === "true") {
     console.info(`say_improvement_event ${JSON.stringify(makeImprovementEvent(card.noticeType, recorded))}`);
@@ -122,6 +132,12 @@ export function recordOutcome(code: string, feedback: RecordOutcomeArgs, expecte
     case_version: card.version,
     privacy: "원문·자유서술·케이스 코드 없이 선택 항목의 비식별 카운터만 개선 신호로 남습니다.",
     lifecycle: "비식별 집계는 케이스와 연결되지 않으므로 케이스 삭제 후에도 집계값으로 남습니다.",
+    improvement_signal: {
+      status: segmentSupport >= MIN_FEEDBACK_SUPPORT ? "minimum_support_reached_for_offline_review" : "collecting_minimum_support",
+      minimum_anonymous_support: MIN_FEEDBACK_SUPPORT,
+      automatic_code_changes: false,
+      next_step: segmentSupport >= MIN_FEEDBACK_SUPPORT ? "npm run improve 결과를 사람이 검토하고 합성 회귀 사례로 재현합니다." : "추가 사용자가 자발적으로 제출한 구조화 결과만 집계합니다.",
+    },
   }, null, 2);
 }
 

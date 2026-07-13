@@ -1,4 +1,4 @@
-# SAY 1.0 — Privacy-first family operations agent
+# SAY 2.0 — Privacy-first family operations agent
 
 ## Product thesis
 
@@ -61,13 +61,17 @@ Case status is derived from risk and action state, not accepted blindly from the
 - Source quotes are not retained.
 - Names become generic family roles.
 - Case codes are random bearer secrets; no case enumeration API exists.
-- The endpoint rate-limits clients and rejects oversized JSON.
+- Case and inspection bearer secrets each carry about 80 bits of entropy.
+- URL paths, queries, fragments and embedded credentials are removed before retention; Unicode bidi/control characters are stripped.
+- The endpoint rate-limits clients, rejects unsupported content types and oversized JSON, and emits security/retry/request-ID headers.
 - Outcome feedback contains no raw text, free text, case code, actor or exact event time in its aggregate. It is optional and accepted once per live case.
 - Selecting OAuth or Key/Token in PlayMCP is incorrect until that protocol is implemented end-to-end.
 
 ## Evidence and source trust
 
 Every extracted fact records a confidence class derived from deterministic evidence rules. Source assessment is deliberately conservative:
+
+Notice classification also returns weighted matched signals, score, margin, alternatives and a high/medium/low confidence. A low-confidence non-unknown classification creates a blocking confirmation action instead of silently pretending certainty.
 
 - `official`: the claimed organization and domain match a maintained registry.
 - `mismatch`: an organization is claimed but a link uses another domain.
@@ -86,6 +90,8 @@ SAY never declares a message genuine solely because a domain looks plausible.
 6. The same mutation request is idempotent for the same target state.
 7. Runtime feedback can propose an experiment but can never modify code, weaken a gate or deploy itself.
 8. Feedback with fewer than five supporting cases cannot become a runtime-driven improvement candidate.
+9. Persisted state is schema-validated, write-serialized and bounded; action history and case events cannot grow without limit.
+10. Every MCP tool returns both backward-compatible text and a common schema-validated structured result envelope.
 
 ## Evaluation contract
 

@@ -83,8 +83,8 @@ function evaluationCandidates(evaluation: EvaluationResult): ImprovementCandidat
   if (evaluation.passed) return [];
   const candidates: ImprovementCandidate[] = [];
   const classification = evaluation.failures.filter((failure) => failure.classification).length;
-  const extraction = evaluation.failures.reduce((sum, failure) => sum + failure.missingFields.length, 0);
-  const risk = evaluation.failures.reduce((sum, failure) => sum + failure.missingRisks.length, 0);
+  const extraction = evaluation.failures.reduce((sum, failure) => sum + failure.missingFields.length + failure.forbiddenFieldsFound.length, 0);
+  const risk = evaluation.failures.reduce((sum, failure) => sum + failure.missingRisks.length + failure.unexpectedRisks.length, 0);
   if (evaluation.metrics.piiLeaks || evaluation.metrics.retainedQuoteFields) {
     candidates.push({
       id: "regression:privacy", priority: "critical", source: "evaluation", scope: "all",
@@ -93,8 +93,8 @@ function evaluationCandidates(evaluation: EvaluationResult): ImprovementCandidat
     });
   }
   if (classification) candidates.push({ id: "regression:classification", priority: "high", source: "evaluation", scope: "corpus", evidence: { failed_cases: classification }, proposedExperiment: "실패한 합성 사례의 분류 점수 차이를 분석하고 가장 작은 규칙 변경을 검증한다.", requiredGuardrails: commonGuardrails });
-  if (extraction) candidates.push({ id: "regression:extraction", priority: "high", source: "evaluation", scope: "corpus", evidence: { missing_expected_fields: extraction }, proposedExperiment: "누락 필드별 표현을 재현하고 기존 범주에 대한 역회귀 없이 추출 규칙을 복구한다.", requiredGuardrails: commonGuardrails });
-  if (risk) candidates.push({ id: "regression:risk", priority: "high", source: "evaluation", scope: "corpus", evidence: { missing_expected_risks: risk }, proposedExperiment: "누락된 위험 규칙의 정규식 경계를 최소 재현 사례에서 복구한다.", requiredGuardrails: commonGuardrails });
+  if (extraction) candidates.push({ id: "regression:extraction", priority: "high", source: "evaluation", scope: "corpus", evidence: { extraction_failures: extraction }, proposedExperiment: "누락·과잉 필드별 표현을 재현하고 기존 범주에 대한 역회귀 없이 추출 규칙을 복구한다.", requiredGuardrails: commonGuardrails });
+  if (risk) candidates.push({ id: "regression:risk", priority: "high", source: "evaluation", scope: "corpus", evidence: { risk_failures: risk }, proposedExperiment: "누락·오탐 위험 규칙의 정규식 경계를 최소 재현 사례에서 복구한다.", requiredGuardrails: commonGuardrails });
   return candidates;
 }
 

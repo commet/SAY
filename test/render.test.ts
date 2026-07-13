@@ -10,7 +10,7 @@ describe("submission output", () => {
   });
   it("does not make a definitive scam verdict", () => {
     const output = renderRisks(buildCard({ raw_text: smishing }, fixedNow).riskSignals);
-    expect(output).toContain("위험 신호 3개"); expect(output).not.toContain("스미싱입니다");
+    expect(output).toContain("위험 신호 4개"); expect(output).not.toContain("스미싱입니다");
   });
   it("contains no fixed forbidden tone", () => {
     const outputs = [renderCard(buildCard({ raw_text: hospital }, fixedNow), fixedNow), renderRisks(buildCard({ raw_text: smishing }, fixedNow).riskSignals)];

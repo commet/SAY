@@ -23,7 +23,7 @@ export function renderRisks(signals: RiskSignal[]): string {
 }
 
 export function renderCard(card: NoticeCard, now = new Date()): string {
-  let out = `[케이스 ${card.code}] ${card.title}로 보여요.\n- 상태: ${caseStatusLabel[card.status]}\n- 버전: ${card.version}\n- 출처 평가: ${sourceTrustLabel[card.sourceAssessment.trust]}\n- 서버가 가린 개인정보 항목: ${card.privacySummary.total}개`;
+  let out = `[케이스 ${card.code}] ${card.title}로 보여요.\n- 상태: ${caseStatusLabel[card.status]}\n- 버전: ${card.version}\n- 분류 신뢰도: ${card.classification.confidence} (점수 ${card.classification.score}, 차이 ${card.classification.margin})\n- 판단 근거: ${card.classification.matchedSignals.join(", ") || "뚜렷한 분류 신호 없음"}\n- 출처 평가: ${sourceTrustLabel[card.sourceAssessment.trust]}\n- 서버가 가린 개인정보 항목: ${card.privacySummary.total}개\n- 자동 삭제 예정: ${formatWhen(card.expiresAt, now)}`;
   if (card.nextCheckAt && Date.parse(card.nextCheckAt) < now.getTime()) out = `지난 확인 예정(${formatWhen(card.nextCheckAt, now)})이 지났어요. 아직 열린 항목을 확인해 주세요.\n\n${out}`;
   out += section("확인된 내용", card.facts.filter((x) => x.confidence === "confirmed").map((x) => `- ${x.label}: ${x.value}`));
   out += section("추정한 내용 (원문에서 근거를 못 찾았어요 — 확인이 필요해요)", card.facts.filter((x) => x.confidence === "inferred").map((x) => `- ${x.label}: ${x.value}`));

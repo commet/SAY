@@ -24,7 +24,14 @@ describe("Streamable HTTP boundary", () => {
   it("reports the shared service version from health", async () => {
     const origin = await start();
     const response = await fetch(`${origin}/health`);
-    await expect(response.json()).resolves.toEqual({ ok: true, name: "say-family-notice", version: "1.1.0" });
+    await expect(response.json()).resolves.toEqual(expect.objectContaining({
+      ok: true, name: "say-family-notice", version: "2.0.0",
+      privacy: { raw_notice_logging: false, maximum_case_retention_hours: 24 },
+      metrics: { mcpRequests: 0, rejectedRequests: 0, rateLimitedRequests: 0 },
+    }));
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(response.headers.get("x-content-type-options")).toBe("nosniff");
+    expect(response.headers.get("x-request-id")).toMatch(/^[0-9a-f-]{36}$/);
     const packageVersion = (JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { version: string }).version;
     expect(packageVersion).toBe(SERVICE_VERSION);
   });
@@ -38,8 +45,9 @@ describe("Streamable HTTP boundary", () => {
     expect(response.status).toBe(200);
     const body = await response.json() as { result: { protocolVersion: string; serverInfo: { name: string; version: string } } };
     expect(body.result.protocolVersion).toBe(protocolVersion);
-    expect(body.result.serverInfo).toEqual({ name: "SAY", version: "1.1.0" });
+    expect(body.result.serverInfo).toEqual({ name: "SAY", version: "2.0.0" });
     expect(response.headers.get("ratelimit-limit")).toBe("60");
+    expect(response.headers.get("ratelimit-reset")).toBeTruthy();
   });
 
   it("returns a sanitized JSON-RPC parse error for malformed JSON", async () => {
@@ -47,5 +55,22 @@ describe("Streamable HTTP boundary", () => {
     const response = await fetch(`${origin}/mcp`, { method: "POST", headers: { "content-type": "application/json" }, body: "{" });
     expect(response.status).toBe(400);
     await expect(response.json()).resolves.toEqual({ jsonrpc: "2.0", error: { code: -32700, message: "Invalid JSON request" }, id: null });
+  });
+
+  it("rejects unsupported content types and oversized bodies", async () => {
+    const origin = await start();
+    const unsupported = await fetch(`${origin}/mcp`, { method: "POST", body: "plain text" });
+    expect(unsupported.status).toBe(415);
+    const oversized = await fetch(`${origin}/mcp`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ value: "x".repeat(70_000) }) });
+    expect(oversized.status).toBe(413);
+  });
+
+  it("returns retry guidance after the privacy-safe IP request limit", async () => {
+    const origin = await start();
+    let response: Response | undefined;
+    for (let index = 0; index < 61; index += 1) response = await fetch(`${origin}/mcp`);
+    expect(response?.status).toBe(429);
+    expect(response?.headers.get("retry-after")).toBeTruthy();
+    await expect(response?.json()).resolves.toEqual(expect.objectContaining({ error: expect.objectContaining({ code: -32001 }) }));
   });
 });

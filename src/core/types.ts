@@ -9,11 +9,20 @@ export type ClassificationQuality = "correct" | "incorrect" | "unsure";
 export type ExtractionQuality = "complete" | "missing_information" | "incorrect_information" | "unsure";
 export type RiskQuality = "appropriate" | "false_alarm" | "missed_risk" | "unsure";
 export type WorkflowFriction = "none" | "too_many_steps" | "unclear_next_action" | "coordination_difficulty" | "privacy_concern";
+export type ClassificationConfidence = "high" | "medium" | "low";
 
 export interface PrivacyFinding { kind: string; count: number; }
 export interface PrivacySummary { total: number; findings: PrivacyFinding[]; }
 export interface SourceAssessment {
   trust: SourceTrust; claimedOrganization?: string; domains: string[]; explanation: string;
+}
+export interface ClassificationAssessment {
+  type: NoticeType;
+  confidence: ClassificationConfidence;
+  score: number;
+  margin: number;
+  matchedSignals: string[];
+  alternatives: { type: NoticeType; score: number }[];
 }
 export interface CaseEvent { at: string; type: "created" | "status_changed" | "action_updated" | "outcome_recorded"; detail: string; }
 export interface OutcomeFeedback {
@@ -49,9 +58,10 @@ export interface RiskSignal { ruleId: string; label: string; severity: "low" | "
 export interface NoticeCard {
   code: string; noticeType: NoticeType; title: string; facts: Fact[]; actionItems: ActionItem[];
   missingFields: MissingField[]; riskSignals: RiskSignal[];
-  status: CaseStatus; version: number; privacySummary: PrivacySummary; sourceAssessment: SourceAssessment; events: CaseEvent[];
+  status: CaseStatus; version: number; privacySummary: PrivacySummary; sourceAssessment: SourceAssessment;
+  classification: ClassificationAssessment; events: CaseEvent[];
   outcomeFeedback?: OutcomeFeedback;
   reminderSuggestions: { atLabel: string; text: string }[]; nextCheckAt?: string;
-  createdAt: string; lastAccessAt: string;
+  createdAt: string; expiresAt: string; lastAccessAt: string;
 }
 export interface ExtractedInput { field_key: string; value: string; quote?: string; }

@@ -1,5 +1,7 @@
 # 사이(SAY) MCP 서버 — 실행 설계도 (Design Blueprint)
 
+> **보관된 초기 설계 초안입니다.** 이 문서는 2026-07-05 MVP 결정을 기록하며 현재 2.0 구현 계약이 아닙니다. 특히 6자리 케이스 코드, 초기 도구 구성, `structuredContent` 제외 결정은 폐기되었습니다. 현재 동작과 제출 기준은 `README.md`, `docs/architecture.md`, `docs/evaluation.md`, `docs/self-improvement.md`, `SUBMISSION.md` 및 테스트를 기준으로 합니다.
+
 작성일: 2026-07-05
 작성자: Fable 5 (설계 담당)
 실행자: 하위 실행 모델 (이 문서만 보고 구현 가능해야 함)

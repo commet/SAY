@@ -25,6 +25,7 @@ voluntary record_outcome
 - case deletion cannot remove an already unlinkable aggregate count
 - sanitized event logging is off by default; `IMPROVEMENT_EVENT_LOG=true` enables it only after an operator approves collection and retention
 - `IMPROVEMENT_STORE_PATH` optionally persists only aggregate counters
+- each accepted outcome reports whether the anonymous notice-type segment has reached the minimum support required for offline review; it still exposes no original text or case code
 
 All runtime signals are untrusted. A person must consider poisoning, selection bias and low sample size before accepting a candidate. Even though the event JSON has no identifier, the hosting platform may attach timestamps or infrastructure metadata; operational logs therefore need restricted access and a short retention policy.
 

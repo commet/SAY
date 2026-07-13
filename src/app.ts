@@ -1,32 +1,65 @@
 import express, { type ErrorRequestHandler } from "express";
+import { randomUUID } from "node:crypto";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 import { buildServer } from "./server.js";
 import { SERVICE_VERSION } from "./version.js";
+import { CARD_TTL_HOURS } from "./core/retention.js";
 
 export function createApp(): express.Express {
   const app = express();
+  const startedAt = Date.now();
+  const metrics = { mcpRequests: 0, rejectedRequests: 0, rateLimitedRequests: 0 };
   app.disable("x-powered-by");
   app.set("trust proxy", 1);
+  app.use((_req, res, next) => {
+    res.set({
+      "Cache-Control": "no-store",
+      "Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'",
+      "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+      "Referrer-Policy": "no-referrer",
+      "X-Content-Type-Options": "nosniff",
+      "X-Frame-Options": "DENY",
+      "X-Request-Id": randomUUID(),
+    });
+    next();
+  });
   app.use(express.json({ limit: "64kb", strict: true }));
 
   const requestWindows = new Map<string, { startedAt: number; count: number }>();
   app.use("/mcp", (req, res, next) => {
+    metrics.mcpRequests += 1;
+    res.on("finish", () => { if (res.statusCode >= 400) metrics.rejectedRequests += 1; });
     const now = Date.now(); const key = req.ip ?? "unknown"; const current = requestWindows.get(key);
     const window = !current || now - current.startedAt >= 60_000 ? { startedAt: now, count: 0 } : current;
     window.count += 1; requestWindows.set(key, window);
     if (requestWindows.size > 10_000) for (const [ip, value] of requestWindows) if (now - value.startedAt >= 60_000) requestWindows.delete(ip);
-    res.set("RateLimit-Limit", "60"); res.set("RateLimit-Remaining", String(Math.max(0, 60 - window.count)));
+    const resetSeconds = Math.max(1, Math.ceil((window.startedAt + 60_000 - now) / 1000));
+    res.set("RateLimit-Limit", "60"); res.set("RateLimit-Remaining", String(Math.max(0, 60 - window.count))); res.set("RateLimit-Reset", String(resetSeconds));
     if (window.count > 60) {
+      metrics.rateLimitedRequests += 1;
+      res.set("Retry-After", String(resetSeconds));
       res.status(429).json({ jsonrpc: "2.0", error: { code: -32001, message: "Too many requests; retry after one minute" }, id: req.body?.id ?? null });
       return;
     }
     next();
   });
 
-  app.get("/health", (_req, res) => res.json({ ok: true, name: "say-family-notice", version: SERVICE_VERSION }));
+  app.get("/health", (_req, res) => res.json({
+    ok: true,
+    name: "say-family-notice",
+    version: SERVICE_VERSION,
+    uptime_seconds: Math.floor((Date.now() - startedAt) / 1000),
+    privacy: { raw_notice_logging: false, maximum_case_retention_hours: CARD_TTL_HOURS },
+    persistence: { cases: Boolean(process.env.CARD_STORE_PATH), anonymous_feedback: Boolean(process.env.IMPROVEMENT_STORE_PATH) },
+    metrics: { ...metrics },
+  }));
   app.post("/mcp", async (req, res) => {
     try {
+      if (!req.is("application/json")) {
+        res.status(415).json({ jsonrpc: "2.0", error: { code: -32600, message: "Content-Type must be application/json" }, id: null });
+        return;
+      }
       if (!isInitializeRequest(req.body) && !req.body?.method) {
         res.status(400).json({ jsonrpc: "2.0", error: { code: -32600, message: "Invalid MCP request" }, id: null });
         return;
@@ -43,8 +76,10 @@ export function createApp(): express.Express {
   app.get("/mcp", (_req, res) => res.status(405).set("Allow", "POST").send());
   app.delete("/mcp", (_req, res) => res.status(405).set("Allow", "POST").send());
 
-  const errorHandler: ErrorRequestHandler = (_error, req, res, _next) => {
-    res.status(400).json({ jsonrpc: "2.0", error: { code: -32700, message: "Invalid JSON request" }, id: req.body?.id ?? null });
+  const errorHandler: ErrorRequestHandler = (error, req, res, _next) => {
+    const status = typeof error === "object" && error !== null && "status" in error && error.status === 413 ? 413 : 400;
+    const message = status === 413 ? "JSON request exceeds the 64kb limit" : "Invalid JSON request";
+    res.status(status).json({ jsonrpc: "2.0", error: { code: status === 413 ? -32002 : -32700, message }, id: req.body?.id ?? null });
   };
   app.use(errorHandler);
   app.use((_req, res) => res.status(404).json({ error: "Not found" }));
