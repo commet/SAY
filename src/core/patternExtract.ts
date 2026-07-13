@@ -10,7 +10,8 @@ function lineValue(line: string, type: NoticeType, key: string): string | undefi
   if (after) return after.slice(0, 160);
   if (key === "amount") return line.match(amountRe)?.[0];
   if (["appointment_date", "deadline", "due_date"].includes(key)) return [line.match(dateRe)?.[0], line.match(timeRe)?.[0]].filter(Boolean).join(" ") || undefined;
-  if (["arrival_time", "fasting_start"].includes(key)) return line.match(timeRe)?.[0];
+  if (key === "arrival_time") return line.match(timeRe)?.[0];
+  if (key === "fasting_start") return line.match(timeRe)?.[0] ?? (line.trim().slice(0, 160) || undefined);
   if (type === "delivery_or_smishing" && key === "has_link") return /https?:\/\//.test(line) ? "링크 있음" : undefined;
   return line.trim().slice(0, 160) || undefined;
 }
@@ -19,10 +20,15 @@ export function patternExtract(rawText: string, type: NoticeType): Fact[] {
   const facts: Fact[] = [];
   const lines = rawText.split(/\r?\n/).map((x) => x.trim()).filter(Boolean);
   for (const field of checklists[type]) {
-    const line = lines.find((x) => field.keywords.test(x));
-    if (!line) continue;
-    const value = lineValue(line, type, field.fieldKey);
-    if (value) facts.push({ fieldKey: field.fieldKey, label: field.label, value, confidence: "confirmed", quote: line.slice(0, 120) });
+    // A heading can contain the field keyword without containing a useful value.
+    // Keep scanning matching lines until one actually yields a fact.
+    for (const line of lines) {
+      if (!field.keywords.test(line)) continue;
+      const value = lineValue(line, type, field.fieldKey);
+      if (!value) continue;
+      facts.push({ fieldKey: field.fieldKey, label: field.label, value, confidence: "confirmed", quote: line.slice(0, 120) });
+      break;
+    }
   }
   return facts;
 }

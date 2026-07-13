@@ -1,7 +1,7 @@
 {
   "name": "say-mcp",
-  "version": "0.2.0",
-  "description": "SAY(사이) family notice action-card MCP server",
+  "version": "1.0.0",
+  "description": "Privacy-first family notice operations agent for PlayMCP",
   "type": "module",
   "main": "dist/index.js",
   "engines": {
@@ -11,6 +11,7 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "dev": "tsx watch src/index.ts",
+    "eval": "tsx eval/run.ts",
     "test": "vitest run",
     "test:watch": "vitest"
   },
