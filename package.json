@@ -1,0 +1,27 @@
+{
+  "name": "say-mcp",
+  "version": "0.1.0",
+  "description": "SAY(사이) family notice action-card MCP server",
+  "type": "module",
+  "main": "dist/index.js",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx watch src/index.ts",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.29.0",
+    "express": "5.2.1",
+    "zod": "3.25.76"
+  },
+  "devDependencies": {
+    "@types/express": "5.0.5",
+    "@types/node": "22.19.11",
+    "tsx": "4.20.6",
+    "typescript": "5.9.3",
+    "vitest": "3.2.7"
+  }
+}
