@@ -2,10 +2,12 @@ import { buildCard, type AnalyzeArgs } from "../core/cardBuilder.js";
 import { normalizeCode } from "../core/cardCode.js";
 import { inspectNotice, type InspectArgs } from "../core/inspectNotice.js";
 import { inspectionStore } from "../core/inspectionStore.js";
+import { feedbackStore } from "../core/feedbackStore.js";
+import { makeImprovementEvent } from "../core/feedbackEvent.js";
 import { detectRiskSignals } from "../core/riskRules.js";
 import { safeActorRole, sanitizeNoticeText } from "../core/privacy.js";
 import { store } from "../core/store.js";
-import type { ItemStatus } from "../core/types.js";
+import type { CaseOutcome, ClassificationQuality, ExtractionQuality, ItemStatus, NoticeType, OutcomeFeedback, RiskQuality, WorkflowFriction } from "../core/types.js";
 import { deriveCaseStatus, nextBestAction } from "../core/workflow.js";
 import { makeMessage, type Audience, type Style } from "../data/messageTemplates.js";
 import { HOST_HINT, missingCard, renderCard, renderRisks } from "../render/renderText.js";
@@ -64,8 +66,67 @@ export function listOpen(codes: string[]): string {
   return `${blocks.join("\n\n")}\n\n${HOST_HINT}`;
 }
 
+export interface RecordOutcomeArgs {
+  outcome: CaseOutcome;
+  classificationQuality: ClassificationQuality;
+  correctedNoticeType?: NoticeType;
+  extractionQuality: ExtractionQuality;
+  riskQuality: RiskQuality;
+  friction: WorkflowFriction;
+}
+
+function sameOutcome(left: OutcomeFeedback, right: RecordOutcomeArgs): boolean {
+  return left.outcome === right.outcome
+    && left.classificationQuality === right.classificationQuality
+    && left.correctedNoticeType === right.correctedNoticeType
+    && left.extractionQuality === right.extractionQuality
+    && left.riskQuality === right.riskQuality
+    && left.friction === right.friction;
+}
+
+export function recordOutcome(code: string, feedback: RecordOutcomeArgs, expectedVersion?: number, now = new Date()): string {
+  const normalized = normalizeCode(code);
+  const card = store.get(normalized);
+  if (!card) return missingCard(normalized);
+  if (feedback.classificationQuality === "incorrect" && !feedback.correctedNoticeType) {
+    return `분류가 틀렸다면 corrected_notice_type을 함께 알려 주세요. 자유서술 원문은 받지 않아요.\n\n${HOST_HINT}`;
+  }
+  if (feedback.classificationQuality !== "incorrect" && feedback.correctedNoticeType) {
+    return `corrected_notice_type은 classification_quality가 incorrect일 때만 사용할 수 있어요.\n\n${HOST_HINT}`;
+  }
+  if (feedback.classificationQuality === "incorrect" && feedback.correctedNoticeType === card.noticeType) {
+    return `현재 분류와 수정 분류가 같아요. 분류가 맞았다면 classification_quality를 correct로 바꿔 주세요.\n\n${HOST_HINT}`;
+  }
+  if (card.outcomeFeedback && sameOutcome(card.outcomeFeedback, feedback)) {
+    return JSON.stringify({ recorded: true, duplicate_ignored: true, case_version: card.version, privacy: "기존의 구조화된 결과 한 건만 유지했으며 추가 집계하지 않았습니다." }, null, 2);
+  }
+  if (card.outcomeFeedback) return `이 케이스에는 이미 결과 피드백이 기록됐어요. 중복·선택 편향을 막기 위해 덮어쓰지 않습니다.\n\n${HOST_HINT}`;
+  if (expectedVersion !== undefined && expectedVersion !== card.version) {
+    return `다른 가족이 먼저 케이스를 수정했어요. 현재 버전은 ${card.version}입니다. get_case로 다시 확인한 뒤 결과를 기록해 주세요.\n\n${HOST_HINT}`;
+  }
+
+  const recorded: OutcomeFeedback = { ...feedback, recordedAt: now.toISOString() };
+  card.outcomeFeedback = recorded;
+  card.version += 1;
+  card.events.push({ at: now.toISOString(), type: "outcome_recorded", detail: feedback.outcome });
+  store.touch(card, now);
+  feedbackStore.record(card.noticeType, recorded, now);
+
+  if (process.env.IMPROVEMENT_EVENT_LOG === "true") {
+    console.info(`say_improvement_event ${JSON.stringify(makeImprovementEvent(card.noticeType, recorded))}`);
+  }
+
+  return JSON.stringify({
+    recorded: true,
+    duplicate_ignored: false,
+    case_version: card.version,
+    privacy: "원문·자유서술·케이스 코드 없이 선택 항목의 비식별 카운터만 개선 신호로 남습니다.",
+    lifecycle: "비식별 집계는 케이스와 연결되지 않으므로 케이스 삭제 후에도 집계값으로 남습니다.",
+  }, null, 2);
+}
+
 export function deleteCase(code: string): string {
   const normalized = normalizeCode(code);
   store.delete(normalized);
-  return `${normalized} 케이스가 삭제됐어요. 존재 여부를 별도로 공개하지 않으며 같은 코드로 다시 조회할 수 없습니다.\n\n${HOST_HINT}`;
+  return `${normalized} 케이스가 삭제됐어요. 존재 여부를 별도로 공개하지 않으며 같은 코드로 다시 조회할 수 없습니다. 이전에 자발적으로 record_outcome을 제출했다면 케이스와 연결되지 않는 비식별 집계 카운터는 남을 수 있어요.\n\n${HOST_HINT}`;
 }

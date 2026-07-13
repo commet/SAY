@@ -2,6 +2,7 @@ import express, { type ErrorRequestHandler } from "express";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 import { buildServer } from "./server.js";
+import { SERVICE_VERSION } from "./version.js";
 
 export function createApp(): express.Express {
   const app = express();
@@ -23,7 +24,7 @@ export function createApp(): express.Express {
     next();
   });
 
-  app.get("/health", (_req, res) => res.json({ ok: true, name: "say-family-notice", version: "1.0.0" }));
+  app.get("/health", (_req, res) => res.json({ ok: true, name: "say-family-notice", version: SERVICE_VERSION }));
   app.post("/mcp", async (req, res) => {
     try {
       if (!isInitializeRequest(req.body) && !req.body?.method) {

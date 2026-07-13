@@ -16,7 +16,9 @@
   → create_case: 임시 케이스 생성
   → get_next_action: 가장 안전한 다음 행동 하나 선택
   → update_action: 가족 역할별 진행 · 충돌 방지
+  → record_outcome: 사용자가 원할 때만 구조화된 결과 기록
   → 완료 후 delete_case 또는 자동 만료
+  → 비식별 반복 신호 → 합성 회귀 사례 → 사람 승인 개선
 ```
 
 ### 왜 에이전트인가
@@ -26,6 +28,7 @@
 - **안전 우선 계획**: 기관-도메인 불일치나 고위험 신호가 있으면 문자 링크를 열지 않고 공식 앱·홈페이지·대표번호 확인을 먼저 요구합니다.
 - **가족 협업**: 엄마·아빠·보호자 같은 일반 역할만 저장하고, 버전 조건으로 동시 수정 덮어쓰기를 막습니다.
 - **수명주기 완결**: 즉시 삭제와 최대 24시간 자동 만료를 지원하며, 전체 케이스를 열거하는 API가 없습니다.
+- **안전한 자가 개선**: 자유서술 없이 반복되는 실패 유형만 집계하고, 평가 게이트와 사람 승인을 통과한 최소 변경만 배포합니다.
 
 사이는 의료·법률·금융 판단을 하지 않으며 메시지가 진짜라고 단정하지 않습니다.
 
@@ -41,6 +44,7 @@
 | `update_action` | 행동 담당·보류·완료 상태 갱신, 선택적 버전 조건으로 충돌 방지 |
 | `make_family_message` | 확인된 사실과 확인할 내용만 담은 가족용 메시지 생성 |
 | `list_open_cases` | 사용자가 직접 제공한 코드들의 열린 행동만 조회 |
+| `record_outcome` | 사용자가 자발적으로 알려준 결과를 원문·자유서술·케이스 코드 없는 비식별 개선 신호로 한 번만 기록 |
 | `delete_case` | 케이스 즉시 삭제 |
 
 모든 도구는 PlayMCP용 설명, 입력 스키마와 5종 `annotations`를 제공합니다. 삭제 도구만 `destructiveHint: true`입니다.
@@ -54,8 +58,10 @@
 - 요청 본문은 64KB로 제한되고 IP별 메모리 기반 요청 제한을 적용합니다.
 - OAuth/Key 인증은 아직 구현하지 않았습니다. 따라서 PlayMCP 등록 시 **인증 사용하지 않음**이 프로토콜상 정직한 선택입니다. 장기 저장이나 민감 데이터 원본 보관에는 이 버전을 사용하면 안 됩니다.
 - `CARD_STORE_PATH`를 명시하면 개발용 파일 저장을 켤 수 있지만, 공모전 공개 배포에서는 사용하지 않습니다.
+- `record_outcome`은 선택 사항이며 케이스당 한 번만 받습니다. 비식별 범주 카운터는 케이스와 연결되지 않으므로 케이스 삭제 후에도 남을 수 있습니다.
+- 개선 신호는 사용자 입력으로 간주해 신뢰하지 않습니다. 표본 5건 미만은 후보로 만들지 않고 어떤 피드백도 서버 코드를 직접 바꾸지 못합니다.
 
-자세한 설계와 공개 베타 전 보강 항목은 [아키텍처 문서](docs/architecture.md)를 참고하세요.
+자세한 설계는 [아키텍처 문서](docs/architecture.md), 개선 운영 절차는 [자가 개선 루프](docs/self-improvement.md)를 참고하세요.
 
 ## 로컬 실행
 
@@ -66,12 +72,13 @@ npm ci
 npm run build
 npm test
 npm run eval
+npm run improve
 npm start
 ```
 
 - MCP Endpoint: `http://localhost:8080/mcp`
 - Health Check: `http://localhost:8080/health`
-- 환경변수: `PORT`(기본 `8080`), `HOST`(기본 `0.0.0.0`), `CARD_TTL_HOURS`(1~24, 기본 24), `CARD_STORE_PATH`(선택)
+- 환경변수: `PORT`(기본 `8080`), `HOST`(기본 `0.0.0.0`), `CARD_TTL_HOURS`(1~24, 기본 24), `CARD_STORE_PATH`(선택), `IMPROVEMENT_STORE_PATH`(비식별 집계 파일, 선택), `IMPROVEMENT_EVENT_LOG`(기본 `false`, 운영 승인 시에만 `true`)
 
 MCP Inspector:
 
@@ -84,6 +91,8 @@ npx @modelcontextprotocol/inspector http://localhost:8080/mcp
 `npm run eval`은 6개 범주 24개 합성 공지에 대해 분류 정확도, 기대 필드 재현율, 기대 위험 규칙 재현율, 개인정보 잔존과 인용문 저장 여부를 수치로 출력합니다. 릴리스 기준과 한계는 [평가 계약](docs/evaluation.md)에 명시했습니다.
 
 `npm test`는 개인정보, 근거 규칙, 동의·토큰, 출처 불일치, 안전한 행동 순서, 선행 조건, 멱등성, 동시 수정 충돌, 삭제와 MCP SDK 기반 `initialize → tools/list → tools/call` 흐름을 검증합니다.
+
+`npm run improve`는 현재 평가 결과와 비식별 집계를 읽어 반복 실패 군집과 다음 실험 후보를 출력합니다. 자동 코드 변경은 하지 않습니다. 전체 릴리스 게이트는 `npm run quality` 한 명령으로 실행합니다.
 
 ## PlayMCP in KC
 

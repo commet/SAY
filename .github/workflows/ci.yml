@@ -3,6 +3,12 @@ name: CI
 on:
   push:
   pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 3 * * 1"
+
+permissions:
+  contents: read
 
 jobs:
   verify:
@@ -16,4 +22,7 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: npm test
+      - run: npm run eval
+      - run: npm run improve
+      - run: npm audit --omit=dev --audit-level=low
       - run: npm audit --audit-level=high

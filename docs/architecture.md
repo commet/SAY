@@ -18,6 +18,7 @@ The agent follows a guarded workflow instead of exposing unrelated utilities:
 4. **Plan** — compute the safest next action from risk, missing facts, deadlines, and dependencies.
 5. **Coordinate** — let family roles claim or complete actions with optimistic version checks.
 6. **Close** — delete completed cases immediately or expire them automatically.
+7. **Learn** — accept one voluntary structured outcome, aggregate only unlinkable counters, and propose guarded experiments after repeated evidence.
 
 The MCP host performs conversational reasoning. The server owns deterministic privacy, validation, state transitions, and invariants.
 
@@ -33,6 +34,7 @@ The MCP host performs conversational reasoning. The server owns deterministic pr
 | `update_action` | Claim, hold or complete an action with optional version precondition | Updates case |
 | `make_family_message` | Produce a privacy-minimized family message | None |
 | `list_open_cases` | List open work across supplied bearer codes | None |
+| `record_outcome` | Record one voluntary, no-free-text outcome and update unlinkable counters | Updates case and aggregate |
 | `delete_case` | Delete a case immediately | Deletes case |
 
 ## State model
@@ -60,6 +62,7 @@ Case status is derived from risk and action state, not accepted blindly from the
 - Names become generic family roles.
 - Case codes are random bearer secrets; no case enumeration API exists.
 - The endpoint rate-limits clients and rejects oversized JSON.
+- Outcome feedback contains no raw text, free text, case code, actor or exact event time in its aggregate. It is optional and accepted once per live case.
 - Selecting OAuth or Key/Token in PlayMCP is incorrect until that protocol is implemented end-to-end.
 
 ## Evidence and source trust
@@ -81,6 +84,8 @@ SAY never declares a message genuine solely because a domain looks plausible.
 4. Updates with a stale expected version are rejected.
 5. Expired or deleted codes never disclose whether another case exists.
 6. The same mutation request is idempotent for the same target state.
+7. Runtime feedback can propose an experiment but can never modify code, weaken a gate or deploy itself.
+8. Feedback with fewer than five supporting cases cannot become a runtime-driven improvement candidate.
 
 ## Evaluation contract
 
@@ -103,6 +108,7 @@ Release gates:
 - workflow invariant and optimistic concurrency tests
 - MCP initialize, tools/list and representative multi-tool E2E test
 - dependency audit with zero production vulnerabilities
+- improvement-candidate generation with no automatic code mutation
 
 ## Delivery phases
 

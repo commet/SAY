@@ -1,7 +1,8 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { createCase, deleteCase, familyMessage, getCard, getNextAction, inspectNotice, listOpen, scamSignals, updateStatus } from "./tools/handlers.js";
+import { createCase, deleteCase, familyMessage, getCard, getNextAction, inspectNotice, listOpen, recordOutcome, scamSignals, updateStatus } from "./tools/handlers.js";
 import type { ItemStatus, NoticeType } from "./core/types.js";
+import { SERVICE_VERSION } from "./version.js";
 
 const text = (value: string) => ({ content: [{ type: "text" as const, text: value }] });
 const failure = (_error: unknown) => ({ content: [{ type: "text" as const, text: "입력 내용을 처리하지 못했어요. 원문, 검사 토큰 또는 케이스 코드를 확인해 다시 시도해 주세요." }], isError: true });
@@ -11,7 +12,7 @@ const annotations = (title: string, options: { readOnly: boolean; destructive?: 
 });
 
 export function buildServer(): McpServer {
-  const server = new McpServer({ name: "SAY", version: "1.0.0" });
+  const server = new McpServer({ name: "SAY", version: SERVICE_VERSION });
 
   server.registerTool("inspect_notice", {
     description: "SAY(사이) mandatory privacy gate before case creation. Redacts identifiers on the server, classifies the notice, assesses claimed-organization/link trust, extracts facts, identifies missing fields and risk signals, and returns a 10-minute inspection token. It stores only the redacted inspection. Show the redacted preview and risks to the user and obtain explicit consent before calling create_case.",
@@ -65,8 +66,30 @@ export function buildServer(): McpServer {
     annotations: annotations("List supplied open cases", { readOnly: true, idempotent: true }),
   }, wrap((args) => listOpen(args.case_codes as string[])));
 
+  server.registerTool("record_outcome", {
+    description: "SAY(사이) records one voluntary, structured outcome for a live case so repeated product failures can become privacy-safe improvement signals. Call only after the user explicitly volunteers the ratings. It accepts no free text, raw notice or person data. Only unlinkable category counters and an optional sanitized operator event remain after case deletion; the server never changes its own code from feedback.",
+    inputSchema: {
+      case_code: z.string().min(10).max(24),
+      outcome: z.enum(["resolved", "partially_resolved", "abandoned", "unsafe_to_continue"]),
+      classification_quality: z.enum(["correct", "incorrect", "unsure"]),
+      corrected_notice_type: z.enum(["hospital", "government", "insurance_card_payment", "delivery_or_smishing", "apartment", "other"]).optional(),
+      extraction_quality: z.enum(["complete", "missing_information", "incorrect_information", "unsure"]),
+      risk_quality: z.enum(["appropriate", "false_alarm", "missed_risk", "unsure"]),
+      friction: z.enum(["none", "too_many_steps", "unclear_next_action", "coordination_difficulty", "privacy_concern"]),
+      expected_version: z.number().int().positive().optional(),
+    },
+    annotations: annotations("Record privacy-safe outcome", { readOnly: false, idempotent: true }),
+  }, wrap((args) => recordOutcome(args.case_code as string, {
+    outcome: args.outcome as "resolved" | "partially_resolved" | "abandoned" | "unsafe_to_continue",
+    classificationQuality: args.classification_quality as "correct" | "incorrect" | "unsure",
+    correctedNoticeType: args.corrected_notice_type as NoticeType | undefined,
+    extractionQuality: args.extraction_quality as "complete" | "missing_information" | "incorrect_information" | "unsure",
+    riskQuality: args.risk_quality as "appropriate" | "false_alarm" | "missed_risk" | "unsure",
+    friction: args.friction as "none" | "too_many_steps" | "unclear_next_action" | "coordination_difficulty" | "privacy_concern",
+  }, args.expected_version as number | undefined)));
+
   server.registerTool("delete_case", {
-    description: "SAY(사이) immediately deletes a short-lived case. Use when the user asks to remove it or after the family has finished and no longer needs the case.",
+    description: "SAY(사이) immediately deletes a short-lived case. Use when the user asks to remove it or after the family has finished. If the user previously volunteered record_outcome, its unlinkable aggregate category counter cannot be singled out and may remain; no case code, raw text or free text is retained in that aggregate.",
     inputSchema: { case_code: z.string().min(10).max(24) },
     annotations: annotations("Delete action case", { readOnly: false, destructive: true, idempotent: true }),
   }, wrap((args) => deleteCase(args.case_code as string)));

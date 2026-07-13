@@ -8,7 +8,7 @@ describe("MCP protocol E2E", () => {
   const cleanups: Array<() => Promise<void>> = [];
   afterEach(async () => { while (cleanups.length) await cleanups.pop()?.(); });
 
-  it("initializes, lists the guarded tool surface and completes inspect/create", async () => {
+  it("initializes, lists the guarded tool surface and completes inspect/create/outcome/delete", async () => {
     const server = buildServer();
     const client = new Client({ name: "say-e2e", version: "1.0.0" });
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
@@ -16,11 +16,11 @@ describe("MCP protocol E2E", () => {
     await client.connect(clientTransport);
     cleanups.push(async () => { await client.close(); await server.close(); });
 
-    expect(client.getServerVersion()).toEqual(expect.objectContaining({ name: "SAY", version: "1.0.0" }));
+    expect(client.getServerVersion()).toEqual(expect.objectContaining({ name: "SAY", version: "1.1.0" }));
     const tools = await client.listTools();
     expect(tools.tools.map((tool) => tool.name)).toEqual([
       "inspect_notice", "create_case", "check_scam_signals", "get_case", "get_next_action",
-      "update_action", "make_family_message", "list_open_cases", "delete_case",
+      "update_action", "make_family_message", "list_open_cases", "record_outcome", "delete_case",
     ]);
     expect(tools.tools.length).toBeGreaterThanOrEqual(3);
     expect(tools.tools.length).toBeLessThanOrEqual(10);
@@ -34,6 +34,8 @@ describe("MCP protocol E2E", () => {
         openWorldHint: expect.any(Boolean), idempotentHint: expect.any(Boolean),
       }));
     }
+    const outcomeTool = tools.tools.find((tool) => tool.name === "record_outcome");
+    expect(Object.keys((outcomeTool?.inputSchema.properties ?? {}) as Record<string, unknown>)).not.toEqual(expect.arrayContaining(["raw_text", "comment", "note", "description"]));
     expect(tools.tools.find((tool) => tool.name === "delete_case")?.annotations?.destructiveHint).toBe(true);
 
     const inspected = await client.callTool({ name: "inspect_notice", arguments: { raw_text: hospital } });
@@ -43,6 +45,22 @@ describe("MCP protocol E2E", () => {
 
     const created = await client.callTool({ name: "create_case", arguments: { inspection_token: inspection.inspection_token, consent: true } });
     const createdText = "content" in created && created.content[0]?.type === "text" ? created.content[0].text : "";
-    expect(createdText).toMatch(/SAY-[A-Z2-9]{4}-[A-Z2-9]{4}-[A-Z2-9]{4}/);
+    const code = createdText.match(/SAY-[A-Z2-9]{4}-[A-Z2-9]{4}-[A-Z2-9]{4}/)?.[0];
+    expect(code).toBeTruthy();
+    const previousLogging = process.env.IMPROVEMENT_EVENT_LOG;
+    process.env.IMPROVEMENT_EVENT_LOG = "false";
+    let outcome;
+    try {
+      outcome = await client.callTool({ name: "record_outcome", arguments: {
+        case_code: code, outcome: "resolved", classification_quality: "correct", extraction_quality: "complete",
+        risk_quality: "appropriate", friction: "none", expected_version: 1,
+      } });
+    } finally {
+      if (previousLogging === undefined) delete process.env.IMPROVEMENT_EVENT_LOG;
+      else process.env.IMPROVEMENT_EVENT_LOG = previousLogging;
+    }
+    const outcomeText = "content" in outcome && outcome.content[0]?.type === "text" ? outcome.content[0].text : "";
+    expect(JSON.parse(outcomeText)).toEqual(expect.objectContaining({ recorded: true, duplicate_ignored: false }));
+    await client.callTool({ name: "delete_case", arguments: { case_code: code } });
   });
 });

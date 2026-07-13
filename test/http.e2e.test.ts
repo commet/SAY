@@ -2,6 +2,8 @@ import type { AddressInfo } from "node:net";
 import type { Server } from "node:http";
 import { afterEach, describe, expect, it } from "vitest";
 import { createApp } from "../src/app.js";
+import { SERVICE_VERSION } from "../src/version.js";
+import { readFileSync } from "node:fs";
 
 describe("Streamable HTTP boundary", () => {
   let server: Server | undefined;
@@ -19,6 +21,14 @@ describe("Streamable HTTP boundary", () => {
     params: { protocolVersion, capabilities: {}, clientInfo: { name: "say-http-e2e", version: "1.0.0" } },
   });
 
+  it("reports the shared service version from health", async () => {
+    const origin = await start();
+    const response = await fetch(`${origin}/health`);
+    await expect(response.json()).resolves.toEqual({ ok: true, name: "say-family-notice", version: "1.1.0" });
+    const packageVersion = (JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { version: string }).version;
+    expect(packageVersion).toBe(SERVICE_VERSION);
+  });
+
   it.each(["2025-03-26", "2025-11-25"])("initializes protocol %s over JSON HTTP", async (protocolVersion) => {
     const origin = await start();
     const response = await fetch(`${origin}/mcp`, {
@@ -28,7 +38,7 @@ describe("Streamable HTTP boundary", () => {
     expect(response.status).toBe(200);
     const body = await response.json() as { result: { protocolVersion: string; serverInfo: { name: string; version: string } } };
     expect(body.result.protocolVersion).toBe(protocolVersion);
-    expect(body.result.serverInfo).toEqual({ name: "SAY", version: "1.0.0" });
+    expect(body.result.serverInfo).toEqual({ name: "SAY", version: "1.1.0" });
     expect(response.headers.get("ratelimit-limit")).toBe("60");
   });
 
