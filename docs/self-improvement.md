@@ -57,6 +57,8 @@ All runtime signals are untrusted. A person must consider poisoning, selection b
 
 Repository branch protection should require the CI workflow and at least one reviewer. The included pull-request template makes the evidence, privacy and release checks explicit; repository settings still need to enforce the reviewer rule.
 
+CI action versions are pinned to immutable release commits, and Dependabot opens weekly npm and GitHub Actions maintenance PRs. Those PRs pass through the same quality and human-review gates; they are never auto-merged by this repository.
+
 ## Candidate families
 
 - classifier boundary confusion
