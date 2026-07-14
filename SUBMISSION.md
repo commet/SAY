@@ -2,10 +2,10 @@
 
 ## 등록값
 
-- KC 서버 이름: `say-family-notice-v3` (2.0 신규 빌드 예정)
+- KC 서버 이름: `say-family-notice-v3` (`Active`, SAY `2.0.0`)
 - MCP 식별자: `SAY`
 - PlayMCP 이름: `SAY 가족 안내`
-- Endpoint 경로: `/mcp`
+- Endpoint: `https://say-family-notice-v3.playmcp-endpoint.kakaocloud.io/mcp`
 - 인증: 인증 사용하지 않음
 - 프로토콜: Streamable HTTP, stateless JSON response
 
