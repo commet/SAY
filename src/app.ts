@@ -6,12 +6,22 @@ import { buildServer } from "./server.js";
 import { SERVICE_VERSION } from "./version.js";
 import { CARD_TTL_HOURS } from "./core/retention.js";
 
+const RATE_LIMIT_WINDOW_MS = 60_000;
+const RATE_LIMIT_MAX_REQUESTS = 60;
+const MAX_TRACKED_CLIENTS = 10_000;
+
+function trustedProxyHops(value = process.env.TRUST_PROXY_HOPS): number | false {
+  const hops = Number(value);
+  return Number.isSafeInteger(hops) && hops >= 1 && hops <= 3 ? hops : false;
+}
+
 export function createApp(): express.Express {
   const app = express();
   const startedAt = Date.now();
   const metrics = { mcpRequests: 0, rejectedRequests: 0, rateLimitedRequests: 0 };
   app.disable("x-powered-by");
-  app.set("trust proxy", 1);
+  // Do not accept client-controlled X-Forwarded-For headers unless deployment explicitly opts in.
+  app.set("trust proxy", trustedProxyHops());
   app.use((_req, res, next) => {
     res.set({
       "Cache-Control": "no-store",
@@ -24,19 +34,21 @@ export function createApp(): express.Express {
     });
     next();
   });
-  app.use(express.json({ limit: "64kb", strict: true }));
 
   const requestWindows = new Map<string, { startedAt: number; count: number }>();
   app.use("/mcp", (req, res, next) => {
     metrics.mcpRequests += 1;
     res.on("finish", () => { if (res.statusCode >= 400) metrics.rejectedRequests += 1; });
     const now = Date.now(); const key = req.ip ?? "unknown"; const current = requestWindows.get(key);
-    const window = !current || now - current.startedAt >= 60_000 ? { startedAt: now, count: 0 } : current;
+    if (!current && requestWindows.size >= MAX_TRACKED_CLIENTS) {
+      for (const [ip, value] of requestWindows) if (now - value.startedAt >= RATE_LIMIT_WINDOW_MS) requestWindows.delete(ip);
+      while (requestWindows.size >= MAX_TRACKED_CLIENTS) requestWindows.delete(requestWindows.keys().next().value as string);
+    }
+    const window = !current || now - current.startedAt >= RATE_LIMIT_WINDOW_MS ? { startedAt: now, count: 0 } : current;
     window.count += 1; requestWindows.set(key, window);
-    if (requestWindows.size > 10_000) for (const [ip, value] of requestWindows) if (now - value.startedAt >= 60_000) requestWindows.delete(ip);
-    const resetSeconds = Math.max(1, Math.ceil((window.startedAt + 60_000 - now) / 1000));
-    res.set("RateLimit-Limit", "60"); res.set("RateLimit-Remaining", String(Math.max(0, 60 - window.count))); res.set("RateLimit-Reset", String(resetSeconds));
-    if (window.count > 60) {
+    const resetSeconds = Math.max(1, Math.ceil((window.startedAt + RATE_LIMIT_WINDOW_MS - now) / 1000));
+    res.set("RateLimit-Limit", String(RATE_LIMIT_MAX_REQUESTS)); res.set("RateLimit-Remaining", String(Math.max(0, RATE_LIMIT_MAX_REQUESTS - window.count))); res.set("RateLimit-Reset", String(resetSeconds));
+    if (window.count > RATE_LIMIT_MAX_REQUESTS) {
       metrics.rateLimitedRequests += 1;
       res.set("Retry-After", String(resetSeconds));
       res.status(429).json({ jsonrpc: "2.0", error: { code: -32001, message: "Too many requests; retry after one minute" }, id: req.body?.id ?? null });
@@ -44,6 +56,8 @@ export function createApp(): express.Express {
     }
     next();
   });
+  // Apply the request limit before parsing so malformed and oversized bodies cannot bypass it.
+  app.use(express.json({ limit: "64kb", strict: true }));
 
   app.get("/health", (_req, res) => res.json({
     ok: true,

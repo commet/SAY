@@ -21,6 +21,7 @@ Operational checks:
 - rejection count is not increasing unexpectedly
 - rate-limited count is compatible with expected test or abuse traffic
 - `/data` is writable by the non-root `node` user when persistence is enabled
+- 기본값은 `X-Forwarded-For`를 신뢰하지 않습니다. 검증된 역방향 프록시 뒤에서만 실제 홉 수로 `TRUST_PROXY_HOPS`(1~3)를 설정하고, 외부 요청이 직접 컨테이너에 도달하지 않는지 확인합니다.
 
 ## Incident response
 

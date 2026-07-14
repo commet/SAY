@@ -169,14 +169,14 @@ Authorization: Bearer <access-token>
 SAY 구현 시 금지:
 
 ```text
-https://example.com/mcp?access_token=...
+https://example.com/mcp?[access-token-query-placeholder]
 ```
 
 허용:
 
 ```http
 POST /mcp
-Authorization: Bearer eyJ...
+Authorization: Bearer <access-token>
 ```
 
 ---
@@ -307,4 +307,3 @@ SAY 예선 MVP에서 OAuth를 피하려면:
 - [ ] 인증 없는 요청 실패 확인
 - [ ] 만료 token 실패 확인
 - [ ] PlayMCP OAuth callback 실제 통과 확인
-

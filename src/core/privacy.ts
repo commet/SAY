@@ -52,7 +52,7 @@ export function inspectPrivacy(value: string): PrivacyInspection {
   });
 
   replace("address", /(주소|배송지|거주지)\s*[:：]\s*[^\r\n]+/g, (_match: string, label: string) => `${label}: [주소 숨김]`);
-  replace("address", /(?:서울|부산|대구|인천|광주|대전|울산|세종)(?:특별시|광역시|특별자치시)?\s+[가-힣0-9]+(?:시|군|구)\s+[가-힣0-9]+(?:로|길|동|읍|면)\s*\d+(?:-\d+)?/g, "[주소 숨김]");
+  replace("address", /(?:서울(?:특별시|시)?|부산(?:광역시|시)?|대구(?:광역시|시)?|인천(?:광역시|시)?|광주(?:광역시|시)?|대전(?:광역시|시)?|울산(?:광역시|시)?|세종(?:특별자치시|시)?|경기(?:도)?|강원(?:특별자치도|도)?|충청(?:북도|남도)?|충북|충남|전라(?:북도|남도)?|전북|전남|경상(?:북도|남도)?|경북|경남|제주(?:특별자치도|도)?)(?:\s+[가-힣0-9]+(?:시|군|구)){0,2}\s+[가-힣0-9]+(?:로|길|동|읍|면)\s*\d+(?:-\d+)?/g, "[주소 숨김]");
   replace("postal_code", /(우편번호)\s*[:：]?\s*\d{5}/g, (_match: string, label: string) => `${label}: [우편번호 숨김]`);
   replace("person_name", /(성명|이름|환자명|수신인|예금주)\s*[:：]\s*(?:[가-힣]{2,5}|[A-Z][A-Z .'-]{1,40})/gi, (_match: string, label: string) => `${label}: [이름 숨김]`);
   replace("date_of_birth", /(생년월일|생일)\s*[:：]?\s*(?:(?:19|20)?\d{2}[.\/-]\d{1,2}[.\/-]\d{1,2}|\d{6})/g, (_match: string, label: string) => `${label}: [생년월일 숨김]`);
@@ -60,7 +60,7 @@ export function inspectPrivacy(value: string): PrivacyInspection {
   replace("business_number", /(?<!\d)\d{3}-\d{2}-\d{5}(?!\d)/g, "[사업자번호 숨김]");
   replace("device_identifier", /(기기\s*(?:ID|식별자)|device\s*id|push\s*token)\s*[:：]?\s*[A-Z0-9._:-]{8,}/gi, (_match: string, label: string) => `${label}: [기기식별자 숨김]`);
   replace("one_time_code", /(인증번호|인증코드|OTP|일회용\s*코드)\s*[:：]?\s*\d{4,10}/gi, (_match: string, label: string) => `${label}: [일회용 코드 숨김]`);
-  replace("access_secret", /((?:공동현관\s*)?비밀번호|PIN)\s*[:：]?\s*[A-Z0-9#*]{4,12}/gi, (_match: string, label: string) => `${label}: [접근코드 숨김]`);
+  replace("access_secret", /((?:공동현관\s*)?(?:비밀번호|접근코드)|PIN)\s*[:：]?\s*[A-Z0-9#*]{4,12}/gi, (_match: string, label: string) => `${label}: [접근코드 숨김]`);
   replace("vehicle_plate", /(?<!\d)\d{2,3}[가-힣]\s?\d{4}(?!\d)/g, "[차량번호 숨김]");
   replace("uuid", /\b[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b/gi, "[고유식별자 숨김]");
   replace("labeled_identifier", /(계좌번호|카드번호|고객번호|환자번호|접수번호|회원번호|보험증권번호|계약번호|운전면허번호|처방전번호)\s*[:：]?\s*[A-Z0-9 -]{6,}/gi, (_match: string, label: string) => `${label}: [식별정보 숨김]`);
@@ -69,7 +69,7 @@ export function inspectPrivacy(value: string): PrivacyInspection {
   replace("identifier", /\b[A-Z][0-9]{7,8}\b/gi, "[식별정보 숨김]");
   replace("email", /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, "[이메일 숨김]");
   replace("financial_number", /(?<!\d)(?:\d[ -]?){13,19}(?!\d)/g, "[금융번호 숨김]");
-  replace("person_name", /([가-힣])([가-힣]{1,3})(?=님)/g, (_match: string, first: string, rest: string) => `${first}${"○".repeat(rest.length)}`);
+  replace("person_name", /(?<![가-힣])(?!(?:고객|보호자)(?:님)?)([가-힣])([가-힣]{1,3})(?=\s*(?:님|고객(?:님)?|귀하|보호자님))/g, (_match: string, first: string, rest: string) => `${first}${"○".repeat(rest.length)}`);
 
   const findings = [...counts.entries()].map(([kind, count]) => ({ kind, count })).sort((left, right) => left.kind.localeCompare(right.kind));
   return { redactedText, summary: { total: findings.reduce((sum, finding) => sum + finding.count, 0), findings } };

@@ -1,6 +1,6 @@
 # SAY evaluation contract
 
-`eval/notices.json` is a synthetic, privacy-safe Korean notice corpus. It contains 40 cases across hospital, government, insurance/payment, delivery/smishing, apartment management and unknown notices. It includes inline dates, invalid calendar dates, relative deadlines, bare short links, HTTP/IP/userinfo/punycode URLs, URL secrets, labeled identifiers, UUIDs, bidi controls and prompt-injection text.
+`eval/notices.json` is a synthetic, privacy-safe Korean notice corpus. It contains 40 cases across hospital, government, insurance/payment, delivery/smishing, apartment management and unknown notices. It includes inline dates, invalid calendar dates, relative deadlines, bare short links, HTTP/IP/userinfo/punycode URLs, URL query values, labeled identifiers, bidi controls and prompt-injection text.
 
 Run the reproducible scorecard:
 

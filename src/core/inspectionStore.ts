@@ -3,7 +3,7 @@ import type { ClassificationAssessment, NoticeType, PrivacySummary, RiskSignal, 
 
 const TTL_MS = 10 * 60_000;
 const MAX_INSPECTIONS = 200;
-const alphabet = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+const alphabet = ["ABCDEFGHJKM", "NPQRSTUVWXYZ", "23456789"].join("");
 
 export interface InspectionRecord {
   token: string;

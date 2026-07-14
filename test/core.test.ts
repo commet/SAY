@@ -5,6 +5,7 @@ import { buildCard } from "../src/core/cardBuilder.js";
 import { cardCode } from "../src/core/cardCode.js";
 import { detectRiskSignals } from "../src/core/riskRules.js";
 import { parseDateTime } from "../src/core/patternExtract.js";
+import { inspectNotice } from "../src/core/inspectNotice.js";
 import { hospital, government, smishing, fixedNow } from "./fixtures.js";
 
 describe("evidence gate", () => {
@@ -48,6 +49,10 @@ describe("classification and cards", () => {
     expect(invalid.facts.some((fact) => fact.fieldKey === "appointment_date")).toBe(false);
     expect(parseDateTime("2026-02-30 오전 10시", fixedNow)).toBeUndefined();
     expect(parseDateTime("오늘까지", fixedNow)).toBe("2026-07-11T14:59:00.000Z");
+  });
+  it("does not retain unrelated text based only on a host classification guess", () => {
+    const inspection = JSON.parse(inspectNotice({ raw_text: "토요일 오후 두 시에 동호회 정기 모임이 있습니다.", notice_type_guess: "hospital" }));
+    expect(inspection).toEqual(expect.objectContaining({ can_create_case: false, inspection_token: null, expires_at: null }));
   });
 });
 describe("risk rules", () => {

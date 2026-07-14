@@ -79,7 +79,7 @@ npm start
 
 - MCP Endpoint: `http://localhost:8080/mcp`
 - Health Check: `http://localhost:8080/health`
-- 환경변수: `PORT`(기본 `8080`), `HOST`(기본 `0.0.0.0`), `CARD_TTL_HOURS`(1~24, 기본 24), `CARD_STORE_PATH`(선택), `IMPROVEMENT_STORE_PATH`(비식별 집계 파일, 선택), `IMPROVEMENT_EVENT_LOG`(기본 `false`, 운영 승인 시에만 `true`)
+- 환경변수: `PORT`(기본 `8080`), `HOST`(기본 `0.0.0.0`), `CARD_TTL_HOURS`(1~24, 기본 24), `CARD_STORE_PATH`(선택), `IMPROVEMENT_STORE_PATH`(비식별 집계 파일, 선택), `IMPROVEMENT_EVENT_LOG`(기본 `false`, 운영 승인 시에만 `true`), `TRUST_PROXY_HOPS`(기본 미신뢰, 검증된 역방향 프록시를 정확히 1~3단계 거칠 때만 설정)
 
 MCP Inspector:
 

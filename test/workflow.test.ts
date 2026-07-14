@@ -34,6 +34,8 @@ describe("guarded case workflow", () => {
 
     const blocked = updateStatus(code!, undefined, "a1", "in_progress", "홍길동", 1, now);
     expect(blocked).toContain("선행 확인");
+    const dismissed = updateStatus(code!, undefined, "a1", "not_applicable", "홍길동", 1, now);
+    expect(dismissed).toContain("선행 확인");
     const skipped = updateStatus(code!, undefined, "verify-source", "not_applicable", "보호자", 1, now);
     expect(skipped).toContain("건너뛸 수 없어요");
     const verified = updateStatus(code!, undefined, "verify-source", "done", "보호자", 1, now);

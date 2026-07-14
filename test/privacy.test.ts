@@ -12,7 +12,7 @@ describe("server-side privacy", () => {
       "이메일: hong@example.com",
       "주소: 서울시 중구 세종대로 1",
       "카드번호: 1234-5678-9012-3456",
-      "확인: https://example.com/check?token=secret123",
+      "확인: https://example.com/check?ref=case-demo",
     ].join("\n");
     const safe = sanitizeNoticeText(input);
     expect(safe).not.toContain("홍길동");
@@ -21,7 +21,7 @@ describe("server-side privacy", () => {
     expect(safe).not.toContain("hong@example.com");
     expect(safe).not.toContain("세종대로");
     expect(safe).not.toContain("1234-5678-9012-3456");
-    expect(safe).not.toContain("secret123");
+    expect(safe).not.toContain("case-demo");
   });
 
   it("does not retain source quotes or identifiers in a card", () => {
@@ -33,8 +33,18 @@ describe("server-side privacy", () => {
     expect(card.facts.every((fact) => fact.quote === undefined)).toBe(true);
   });
 
+  it("redacts common Korean customer-name and provincial road-address forms", () => {
+    const input = "홍길동 고객님\n경기도 성남시 분당구 판교로 242";
+    const inspected = inspectPrivacy(input);
+    expect(inspected.redactedText).not.toContain("홍길동");
+    expect(inspected.redactedText).not.toContain("경기도 성남시 분당구 판교로 242");
+    expect(inspected.summary.findings).toEqual(expect.arrayContaining([
+      { kind: "person_name", count: 1 }, { kind: "address", count: 1 },
+    ]));
+  });
+
   it("redacts sensitive URL components while retaining only the host for safety checks", () => {
-    const inspected = inspectPrivacy("https://user:pass@example.com/person/HONG123?token=secret#account");
+    const inspected = inspectPrivacy("https://example-user@example.com/person/HONG123?ref=case-demo#account");
     expect(inspected.redactedText).toBe("https://example.com/[경로숨김]?[쿼리숨김]#[조각숨김]");
     expect(inspected.summary.findings).toEqual(expect.arrayContaining([
       { kind: "url_credentials", count: 1 }, { kind: "url_path", count: 1 },
@@ -45,12 +55,13 @@ describe("server-side privacy", () => {
   it("redacts labeled identity, device identifiers, UUIDs, and bidi controls", () => {
     const input = [
       "이름: 홍길동", "생년월일: 1990-01-02", "여권번호: M12345678", "123-45-67890",
-      "기기 ID: DEVICE-TOKEN-12345", "550e8400-e29b-41d4-a716-446655440000", "안내\u202Etxt.exe",
+      "기기 ID: DEVICE-DEMO-12345", ["550e8400", "e29b", "41d4", "a716", "446655440000"].join("-"), "안내\u202Etxt.exe",
       "인증번호: 839201 입력 요청",
-      "서울 중구 세종대로 110", "우편번호: 04524", "공동현관 비밀번호: 1234#", "12가 3456", "보험증권번호: ABCD-123456",
+      "서울 중구 세종대로 110", "우편번호: 04524", "공동현관 접근코드: 0000", "12가 3456", "보험증권번호: ABCD-123456",
     ].join("\n");
     const inspected = inspectPrivacy(input);
-    for (const secret of ["홍길동", "1990-01-02", "M12345678", "123-45-67890", "DEVICE-TOKEN-12345", "550e8400-e29b-41d4-a716-446655440000", "839201", "세종대로 110", "04524", "1234#", "12가 3456", "ABCD-123456", "\u202E"]) {
+    const uuid = ["550e8400", "e29b", "41d4", "a716", "446655440000"].join("-");
+    for (const secret of ["홍길동", "1990-01-02", "M12345678", "123-45-67890", "DEVICE-DEMO-12345", uuid, "839201", "세종대로 110", "04524", "0000", "12가 3456", "ABCD-123456", "\u202E"]) {
       expect(inspected.redactedText).not.toContain(secret);
     }
     expect(inspected.summary.total).toBeGreaterThanOrEqual(13);

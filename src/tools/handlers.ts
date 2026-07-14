@@ -51,7 +51,7 @@ export function updateStatus(code: string, itemLabel: string | undefined, itemId
     const dependency = card.actionItems.find((candidate) => candidate.id === dependencyId);
     return !dependency || (["verify-source", "confirm-type"].includes(dependency.id) ? dependency.status !== "done" : !["done", "not_applicable"].includes(dependency.status));
   });
-  if (unmet.length && !["unchecked", "on_hold", "not_applicable"].includes(status)) return `선행 확인(${unmet.join(", ")})이 끝나기 전에는 이 항목을 진행할 수 없어요. 먼저 get_next_action을 확인해 주세요.\n\n${HOST_HINT}`;
+  if (unmet.length && !["unchecked", "on_hold"].includes(status)) return `선행 확인(${unmet.join(", ")})이 끝나기 전에는 이 항목을 진행할 수 없어요. 먼저 get_next_action을 확인해 주세요.\n\n${HOST_HINT}`;
   const previousCaseStatus = card.status; item.status = status; item.actorName = role;
   item.history.push({ at: now.toISOString(), status, actorName: role });
   item.history = item.history.slice(-20);

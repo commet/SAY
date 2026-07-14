@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-const alphabet = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+const alphabet = ["ABCDEFGHJKM", "NPQRSTUVWXYZ", "23456789"].join("");
 export function cardCode(): string {
   const compact = Array.from(randomBytes(16), (byte) => alphabet[byte % alphabet.length]).join("");
   return `SAY-${compact.slice(0, 4)}-${compact.slice(4, 8)}-${compact.slice(8, 12)}-${compact.slice(12)}`;

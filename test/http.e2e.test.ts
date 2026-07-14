@@ -23,6 +23,7 @@ describe("Streamable HTTP boundary", () => {
 
   it("reports the shared service version from health", async () => {
     const origin = await start();
+    expect(createApp().get("trust proxy")).toBe(false);
     const response = await fetch(`${origin}/health`);
     await expect(response.json()).resolves.toEqual(expect.objectContaining({
       ok: true, name: "say-family-notice", version: "2.0.0",
@@ -55,6 +56,7 @@ describe("Streamable HTTP boundary", () => {
     const response = await fetch(`${origin}/mcp`, { method: "POST", headers: { "content-type": "application/json" }, body: "{" });
     expect(response.status).toBe(400);
     await expect(response.json()).resolves.toEqual({ jsonrpc: "2.0", error: { code: -32700, message: "Invalid JSON request" }, id: null });
+    expect(response.headers.get("ratelimit-limit")).toBe("60");
   });
 
   it("rejects unsupported content types and oversized bodies", async () => {

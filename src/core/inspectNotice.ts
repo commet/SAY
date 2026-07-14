@@ -20,7 +20,9 @@ export function inspectNotice(args: InspectArgs, now = new Date()): string {
   const missing = checklists[noticeType].filter((field) => field.required && !confirmed.has(field.fieldKey)).map((field) => field.label);
   const risks = detectRiskSignals(args.raw_text, args.sender_hint);
   const sourceAssessment = assessSource(args.raw_text, args.sender_hint);
-  const canCreateCase = noticeType !== "other" || facts.length > 0;
+  // A host-provided type guess alone is not enough to retain a case. Require a
+  // deterministic classification signal or at least one extracted source fact.
+  const canCreateCase = noticeType !== "other" && (classification.score > 0 || facts.length > 0);
   const inspection = canCreateCase ? inspectionStore.create({ redactedText: privacy.redactedText, noticeType, classification, senderHint, privacySummary: combinedPrivacy, sourceAssessment, riskSignals: risks }, now) : undefined;
   return JSON.stringify({
     inspection_token: inspection?.token ?? null,
