@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { evidenceGate, normalize } from "../src/core/evidenceGate.js";
 import { classifyNotice, classifyNoticeDetailed } from "../src/core/classify.js";
 import { buildCard } from "../src/core/cardBuilder.js";
 import { cardCode } from "../src/core/cardCode.js";
@@ -8,13 +7,6 @@ import { parseDateTime } from "../src/core/patternExtract.js";
 import { inspectNotice } from "../src/core/inspectNotice.js";
 import { hospital, government, smishing, fixedNow } from "./fixtures.js";
 
-describe("evidence gate", () => {
-  it("normalizes whitespace and NFC", () => expect(normalize("  가\n 나  ")).toBe("가 나"));
-  it("confirms only source-backed quotes", () => {
-    expect(evidenceGate(hospital, "신분증", "신분증을 반드시 지참해 주세요.")).toBe("confirmed");
-    expect(evidenceGate(hospital, "수면내시경", "수면내시경 검사가 포함")).toBe("inferred");
-  });
-});
 describe("classification and cards", () => {
   it("classifies the three submission scenarios", () => {
     expect(classifyNotice(hospital)).toBe("hospital"); expect(classifyNotice(government)).toBe("government"); expect(classifyNotice(smishing)).toBe("delivery_or_smishing");
@@ -53,6 +45,22 @@ describe("classification and cards", () => {
   it("does not retain unrelated text based only on a host classification guess", () => {
     const inspection = JSON.parse(inspectNotice({ raw_text: "토요일 오후 두 시에 동호회 정기 모임이 있습니다.", notice_type_guess: "hospital" }));
     expect(inspection).toEqual(expect.objectContaining({ can_create_case: false, inspection_token: null, expires_at: null }));
+  });
+  it("requires explicit user confirmation before retaining a low-confidence classification", () => {
+    const initial = JSON.parse(inspectNotice({ raw_text: "신청 안내입니다. 자세한 내용은 공지를 확인해 주세요." }));
+    expect(initial).toEqual(expect.objectContaining({
+      can_create_case: false,
+      inspection_token: null,
+      classification_confirmation_required: true,
+    }));
+    expect(initial.classification).toEqual(expect.objectContaining({ type: "government", confidence: "low", confirmed_by_user: false }));
+    expect(initial.classification).not.toHaveProperty("score");
+    expect(initial.next_step).toContain("confirmed_notice_type");
+
+    const confirmed = JSON.parse(inspectNotice({ raw_text: "신청 안내입니다. 자세한 내용은 공지를 확인해 주세요.", confirmed_notice_type: "government" }));
+    expect(confirmed).toEqual(expect.objectContaining({ can_create_case: true, classification_confirmation_required: false }));
+    expect(confirmed.inspection_token).toMatch(/^INSP-/);
+    expect(confirmed.classification).toEqual(expect.objectContaining({ type: "government", confidence: "high", confirmed_by_user: true }));
   });
 });
 describe("risk rules", () => {

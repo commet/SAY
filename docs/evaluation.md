@@ -6,6 +6,7 @@ Run the reproducible scorecard:
 
 ```bash
 npm run eval
+npm run perf
 npm run improve
 npm run quality
 ```
@@ -22,6 +23,8 @@ The release fails unless all of these gates pass:
 - no source quote is retained in a stored case
 
 `npm test` separately checks consent, single-use inspection tokens, source/domain mismatch, safe action ordering, dependency blocking, optimistic concurrency, bounded/serialized persistence, deletion, HTTP security boundaries, MCP input/output schemas and a representative multi-tool conversation.
+
+`npm run perf` executes 200 representative `inspect_notice` calls through MCP SDK validation and an in-memory transport after warm-up. It fails the release when average latency exceeds 100ms or p99 exceeds 3,000ms. HTTP E2E separately exercises an actual stateless `tools/call`; production ingress latency must still be checked after deployment.
 
 `npm run improve` combines this deterministic evaluation with an optional privacy-safe feedback summary (`npm run improve -- path/to/summary.json`). Evaluation regressions are immediate release blockers. Runtime feedback needs at least five matching samples before it can produce a human-review experiment candidate. It never edits source files.
 

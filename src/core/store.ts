@@ -19,11 +19,12 @@ const classification = z.object({
   margin: z.number().int().nonnegative(),
   matchedSignals: z.array(z.string().max(100)).max(20),
   alternatives: z.array(z.object({ type: noticeType, score: z.number().int().nonnegative() }).strict()).max(5),
+  confirmedByUser: z.boolean().optional(),
 }).strict();
 const actionItem = z.object({
-  id: z.string().min(1).max(20), label: z.string().min(1).max(240), kind: z.enum(["verify_source", "complete_notice", "clarify"]),
+  id: z.string().min(1).max(20), fieldKey: z.string().min(1).max(80).optional(), label: z.string().min(1).max(240), kind: z.enum(["verify_source", "complete_notice", "clarify"]),
   priority: z.union([z.literal(1), z.literal(2), z.literal(3)]), dependsOn: z.array(z.string().min(1).max(20)).max(5).optional(),
-  dueAt: iso.optional(), status: itemStatus, actorName: z.string().max(20).optional(),
+  dueAt: iso.optional(), status: itemStatus, actorName: z.string().max(20).optional(), resultNote: z.string().min(1).max(240).optional(),
   history: z.array(z.object({ at: iso, status: itemStatus, actorName: z.string().max(20).optional() }).strict()).min(1).max(20),
 }).strict();
 const feedback = z.object({
@@ -46,7 +47,7 @@ const noticeCardSchema = z.object({
   classification,
   events: z.array(z.object({ at: iso, type: z.enum(["created", "status_changed", "action_updated", "outcome_recorded"]), detail: z.string().max(240) }).strict()).min(1).max(50),
   outcomeFeedback: feedback.optional(),
-  reminderSuggestions: z.array(z.object({ atLabel: z.string().min(1).max(160), text: z.string().min(1).max(240) }).strict()).max(3),
+  reminderSuggestions: z.array(z.object({ fieldKey: z.string().min(1).max(80).optional(), atLabel: z.string().min(1).max(160), text: z.string().min(1).max(240) }).strict()).max(3),
   nextCheckAt: iso.optional(), createdAt: iso, expiresAt: iso, lastAccessAt: iso,
 }).strict();
 

@@ -26,7 +26,7 @@ describe("Streamable HTTP boundary", () => {
     expect(createApp().get("trust proxy")).toBe(false);
     const response = await fetch(`${origin}/health`);
     await expect(response.json()).resolves.toEqual(expect.objectContaining({
-      ok: true, name: "say-family-notice", version: "2.0.0",
+      ok: true, name: "say-family-notice", version: "2.1.0",
       privacy: { raw_notice_logging: false, maximum_case_retention_hours: 24 },
       metrics: { mcpRequests: 0, rejectedRequests: 0, rateLimitedRequests: 0 },
     }));
@@ -46,9 +46,27 @@ describe("Streamable HTTP boundary", () => {
     expect(response.status).toBe(200);
     const body = await response.json() as { result: { protocolVersion: string; serverInfo: { name: string; version: string } } };
     expect(body.result.protocolVersion).toBe(protocolVersion);
-    expect(body.result.serverInfo).toEqual({ name: "SAY", version: "2.0.0" });
+    expect(body.result.serverInfo).toEqual({ name: "SAY", version: "2.1.0" });
     expect(response.headers.get("ratelimit-limit")).toBe("60");
     expect(response.headers.get("ratelimit-reset")).toBeTruthy();
+  });
+
+  it("calls a representative tool through the stateless HTTP transport within the p99 limit", async () => {
+    const origin = await start();
+    const started = performance.now();
+    const response = await fetch(`${origin}/mcp`, {
+      method: "POST",
+      headers: { "content-type": "application/json", accept: "application/json, text/event-stream", "mcp-protocol-version": "2025-03-26" },
+      body: JSON.stringify({
+        jsonrpc: "2.0", id: 2, method: "tools/call",
+        params: { name: "check_scam_signals", arguments: { raw_text: "택배 주소 확인 http://parcel.xyz/change" } },
+      }),
+    });
+    const elapsed = performance.now() - started;
+    expect(response.status).toBe(200);
+    const body = await response.json() as { result: { structuredContent: { ok: boolean; message: string } } };
+    expect(body.result.structuredContent).toEqual(expect.objectContaining({ ok: true, message: expect.stringContaining("위험 신호") }));
+    expect(elapsed).toBeLessThan(3000);
   });
 
   it("returns a sanitized JSON-RPC parse error for malformed JSON", async () => {

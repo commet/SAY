@@ -1,4 +1,4 @@
-import { buildCard, type AnalyzeArgs } from "../core/cardBuilder.js";
+import { buildCard } from "../core/cardBuilder.js";
 import { normalizeCode } from "../core/cardCode.js";
 import { inspectNotice, type InspectArgs } from "../core/inspectNotice.js";
 import { inspectionStore } from "../core/inspectionStore.js";
@@ -6,20 +6,13 @@ import { feedbackStore } from "../core/feedbackStore.js";
 import { makeImprovementEvent } from "../core/feedbackEvent.js";
 import { MIN_FEEDBACK_SUPPORT } from "../core/improvementReport.js";
 import { detectRiskSignals } from "../core/riskRules.js";
-import { safeActorRole } from "../core/privacy.js";
+import { inspectPrivacy, mergePrivacySummaries, safeActorRole } from "../core/privacy.js";
 import { store } from "../core/store.js";
 import type { CaseOutcome, ClassificationQuality, ExtractionQuality, ItemStatus, NoticeType, OutcomeFeedback, RiskQuality, WorkflowFriction } from "../core/types.js";
 import { deriveCaseStatus, nextBestAction } from "../core/workflow.js";
 import { makeMessage, type Audience, type Style } from "../data/messageTemplates.js";
 import { HOST_HINT, missingCard, renderCard, renderRisks } from "../render/renderText.js";
 
-export function analyzeNotice(args: AnalyzeArgs, now = new Date()): string {
-  const card = buildCard(args, now);
-  const existing = store.get(card.code);
-  if (existing) { store.touch(existing, now); return renderCard(existing, now); }
-  if (card.noticeType === "other" && card.facts.length === 0) return `안내문으로 보이지 않아요. 문자 전체나 캡처의 모든 글자를 보내주시면 케이스로 만들어 드려요.\n\n${HOST_HINT}`;
-  store.put(card); return renderCard(card, now);
-}
 export { inspectNotice };
 export type { InspectArgs };
 
@@ -35,26 +28,39 @@ export function createCase(inspectionToken: string, consent: boolean, now = new 
 export function scamSignals(rawText: string, senderHint?: string): string { return renderRisks(detectRiskSignals(rawText, senderHint)); }
 export function getCard(code: string, now = new Date()): string { const normalized = normalizeCode(code); const card = store.get(normalized); return card ? renderCard(card, now) : missingCard(normalized); }
 export function getNextAction(code: string): string { const normalized = normalizeCode(code); const card = store.get(normalized); return card ? nextBestAction(card) : missingCard(normalized); }
-export function updateStatus(code: string, itemLabel: string | undefined, itemId: string | undefined, status: ItemStatus, actorName?: string, expectedVersion?: number, now = new Date()): string {
+export function updateStatus(code: string, itemLabel: string | undefined, itemId: string | undefined, status: ItemStatus, actorName?: string, expectedVersion?: number, now = new Date(), resultNote?: string): string {
   const normalized = normalizeCode(code); const card = store.get(normalized); if (!card) return missingCard(normalized);
   if (!itemLabel && !itemId) return `바꿀 항목의 이름(item_label)이나 항목 ID(item_id)가 필요해요.\n\n${HOST_HINT}`;
   const matches = card.actionItems.filter((x) => itemId ? x.id.toLowerCase() === itemId.toLowerCase() : x.label.includes(itemLabel!));
   if (matches.length !== 1) return `다음 중 어느 항목인가요? 항목 이름을 조금 더 구체적으로 알려 주세요.\n${card.actionItems.map((x) => `- ${x.label}`).join("\n")}\n\n${HOST_HINT}`;
   const item = matches[0];
-  const role = safeActorRole(actorName); const last = item.history.at(-1);
+  const role = actorName === undefined ? item.actorName : safeActorRole(actorName);
+  const noteInspection = resultNote === undefined ? undefined : inspectPrivacy(resultNote);
+  const sanitizedNote = noteInspection?.redactedText.replace(/\s+/g, " ").trim().slice(0, 240);
+  if (resultNote !== undefined && !sanitizedNote) return `확인 결과(result_note)에 저장할 내용이 없어요. 짧은 사실만 적어 주세요.\n\n${HOST_HINT}`;
+  const desiredNote = resultNote === undefined ? item.resultNote : sanitizedNote;
+  const noteChanged = item.resultNote !== desiredNote;
+  const last = item.history.at(-1);
   // Replaying an already-applied target state is safe even when its original
   // expected_version is now stale. This keeps the advertised mutation idempotent.
-  if (last?.status === status && last.actorName === role) return renderCard(card, now);
+  if (last?.status === status && last.actorName === role && item.resultNote === desiredNote) return renderCard(card, now);
   if (expectedVersion !== undefined && expectedVersion !== card.version) return `다른 가족이 먼저 케이스를 수정했어요. 현재 버전은 ${card.version}입니다. get_case로 다시 확인한 뒤 업데이트해 주세요.\n\n${HOST_HINT}`;
   if (["verify-source", "confirm-type"].includes(item.id) && status === "not_applicable") return `안전 확인 항목은 '해당 없음'으로 건너뛸 수 없어요. 공식 채널 또는 안내 종류를 확인한 뒤 완료로 표시해 주세요.\n\n${HOST_HINT}`;
+  if (item.id === "verify-source" && status === "done" && !desiredNote) return `출처 확인을 완료하려면 공식 앱·홈페이지·대표번호에서 확인한 짧은 결과를 result_note에 함께 남겨 주세요.\n\n${HOST_HINT}`;
+  if (item.kind === "clarify" && item.fieldKey && status === "done" && !desiredNote) return `확인이 필요한 항목을 완료하려면 알아낸 짧은 답을 result_note에 함께 남겨 주세요. 개인정보는 서버에서 마스킹합니다.\n\n${HOST_HINT}`;
   const unmet = (item.dependsOn ?? []).filter((dependencyId) => {
     const dependency = card.actionItems.find((candidate) => candidate.id === dependencyId);
     return !dependency || (["verify-source", "confirm-type"].includes(dependency.id) ? dependency.status !== "done" : !["done", "not_applicable"].includes(dependency.status));
   });
   if (unmet.length && !["unchecked", "on_hold"].includes(status)) return `선행 확인(${unmet.join(", ")})이 끝나기 전에는 이 항목을 진행할 수 없어요. 먼저 get_next_action을 확인해 주세요.\n\n${HOST_HINT}`;
-  const previousCaseStatus = card.status; item.status = status; item.actorName = role;
-  item.history.push({ at: now.toISOString(), status, actorName: role });
-  item.history = item.history.slice(-20);
+  const previousCaseStatus = card.status;
+  const stateChanged = item.status !== status || item.actorName !== role;
+  item.status = status; item.actorName = role; item.resultNote = desiredNote;
+  if (stateChanged) {
+    item.history.push({ at: now.toISOString(), status, actorName: role });
+    item.history = item.history.slice(-20);
+  }
+  if (noteChanged && noteInspection) card.privacySummary = mergePrivacySummaries(card.privacySummary, noteInspection.summary);
   card.version += 1;
   card.events.push({ at: now.toISOString(), type: "action_updated", detail: `${item.id}:${status}` });
   card.status = deriveCaseStatus(card);

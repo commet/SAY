@@ -26,11 +26,16 @@ export function buildServer(): McpServer {
   const server = new McpServer({ name: "SAY", version: SERVICE_VERSION });
 
   server.registerTool("inspect_notice", {
-    description: "SAY(사이) mandatory privacy gate before case creation. Redacts identifiers on the server, classifies the notice with confidence, assesses claimed-organization/link trust, extracts facts, and identifies missing fields and risks. It returns a 10-minute token only for an actionable notice and stores only that redacted inspection. Show the preview and risks and obtain explicit consent before create_case.",
-    inputSchema: { raw_text: z.string().min(5).max(8000).describe("Notice text. The server redacts it before any retention."), notice_type_guess: z.enum(["hospital", "government", "insurance_card_payment", "delivery_or_smishing", "apartment", "other"]).optional(), sender_hint: z.string().max(100).optional() },
+    description: "SAY(사이) mandatory privacy gate before case creation. Redacts identifiers on the server, classifies the notice, checks source/link risk, and extracts facts and missing fields. Low-confidence results issue no token until the user explicitly confirms a type; pass that choice as confirmed_notice_type. Show the redacted preview and risks and obtain explicit storage consent before create_case.",
+    inputSchema: {
+      raw_text: z.string().min(5).max(8000).describe("Notice text. The server redacts it before any retention."),
+      notice_type_guess: z.enum(["hospital", "government", "insurance_card_payment", "delivery_or_smishing", "apartment", "other"]).optional().describe("Optional host hint; never treated as user confirmation."),
+      confirmed_notice_type: z.enum(["hospital", "government", "insurance_card_payment", "delivery_or_smishing", "apartment", "other"]).optional().describe("Set only after the user explicitly confirms the notice type shown in a low-confidence preview."),
+      sender_hint: z.string().max(100).optional(),
+    },
     outputSchema,
     annotations: annotations("Inspect and redact notice", { readOnly: false, idempotent: false }),
-  }, wrap((args) => inspectNotice(args as unknown as { raw_text: string; notice_type_guess?: NoticeType; sender_hint?: string })));
+  }, wrap((args) => inspectNotice(args as unknown as { raw_text: string; notice_type_guess?: NoticeType; confirmed_notice_type?: NoticeType; sender_hint?: string })));
 
   server.registerTool("create_case", {
     description: "SAY(사이) creates a short-lived family action case from a valid inspect_notice token. Call only after the user has seen the redacted preview and explicitly agreed to temporary case storage. The token is single-use, expires in 10 minutes, and no original text or source quote is stored.",
@@ -61,15 +66,17 @@ export function buildServer(): McpServer {
   }, wrap((args) => getNextAction(args.case_code as string)));
 
   server.registerTool("update_action", {
-    description: "SAY(사이) claims, holds, completes or dismisses one action. Use expected_version from get_case/get_next_action to prevent overwriting a family member's newer change. Personal names are replaced with generic family roles.",
+    description: "SAY(사이) claims, holds, completes or dismisses one action and can retain a short result_note such as an answer confirmed with a hospital or official app. The server redacts identifiers from that note. Use expected_version to prevent overwriting a newer family update; personal names become generic family roles.",
     inputSchema: {
       case_code: z.string().min(10).max(24), action_id: z.string().max(20).optional(), action_label: z.string().max(120).optional(),
       new_status: z.enum(["unchecked", "i_will_check", "asked_family", "in_progress", "done", "on_hold", "not_applicable"]),
-      actor_role: z.string().max(20).optional().describe("Generic role such as 엄마, 아빠, 보호자 or 가족"), expected_version: z.number().int().positive().optional(),
+      actor_role: z.string().max(20).optional().describe("Generic role such as 엄마, 아빠, 보호자 or 가족"),
+      result_note: z.string().trim().min(1).max(240).optional().describe("Optional short confirmed result or progress note. Identifiers are redacted before retention."),
+      expected_version: z.number().int().positive().optional(),
     },
     outputSchema,
     annotations: annotations("Update case action", { readOnly: false, idempotent: true }),
-  }, wrap((args) => updateStatus(args.case_code as string, args.action_label as string | undefined, args.action_id as string | undefined, args.new_status as ItemStatus, args.actor_role as string | undefined, args.expected_version as number | undefined)));
+  }, wrap((args) => updateStatus(args.case_code as string, args.action_label as string | undefined, args.action_id as string | undefined, args.new_status as ItemStatus, args.actor_role as string | undefined, args.expected_version as number | undefined, new Date(), args.result_note as string | undefined)));
 
   server.registerTool("make_family_message", {
     description: "SAY(사이) builds a short privacy-minimized follow-up message from an existing case for a parent, child or family chat room. It distinguishes confirmed facts from missing checks and includes the bearer-code warning.",

@@ -16,7 +16,7 @@ describe("MCP protocol E2E", () => {
     await client.connect(clientTransport);
     cleanups.push(async () => { await client.close(); await server.close(); });
 
-    expect(client.getServerVersion()).toEqual(expect.objectContaining({ name: "SAY", version: "2.0.0" }));
+    expect(client.getServerVersion()).toEqual(expect.objectContaining({ name: "SAY", version: "2.1.0" }));
     const tools = await client.listTools();
     expect(tools.tools.map((tool) => tool.name)).toEqual([
       "inspect_notice", "create_case", "check_scam_signals", "get_case", "get_next_action",
@@ -36,6 +36,10 @@ describe("MCP protocol E2E", () => {
       }));
     }
     const outcomeTool = tools.tools.find((tool) => tool.name === "record_outcome");
+    const inspectTool = tools.tools.find((tool) => tool.name === "inspect_notice");
+    const updateTool = tools.tools.find((tool) => tool.name === "update_action");
+    expect(Object.keys((inspectTool?.inputSchema.properties ?? {}) as Record<string, unknown>)).toContain("confirmed_notice_type");
+    expect(Object.keys((updateTool?.inputSchema.properties ?? {}) as Record<string, unknown>)).toContain("result_note");
     expect(Object.keys((outcomeTool?.inputSchema.properties ?? {}) as Record<string, unknown>)).not.toEqual(expect.arrayContaining(["raw_text", "comment", "note", "description"]));
     expect(tools.tools.find((tool) => tool.name === "delete_case")?.annotations?.destructiveHint).toBe(true);
 

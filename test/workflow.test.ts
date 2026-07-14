@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createCase, deleteCase, getCard, getNextAction, inspectNotice, updateStatus } from "../src/tools/handlers.js";
+import { createCase, deleteCase, familyMessage, getCard, getNextAction, inspectNotice, updateStatus } from "../src/tools/handlers.js";
 import { buildCard } from "../src/core/cardBuilder.js";
 import { CardStore, store } from "../src/core/store.js";
 import { hospital, smishing } from "./fixtures.js";
@@ -38,10 +38,11 @@ describe("guarded case workflow", () => {
     expect(dismissed).toContain("선행 확인");
     const skipped = updateStatus(code!, undefined, "verify-source", "not_applicable", "보호자", 1, now);
     expect(skipped).toContain("건너뛸 수 없어요");
-    const verified = updateStatus(code!, undefined, "verify-source", "done", "보호자", 1, now);
-    expect(verified).toContain("버전: 2");
-    const replayed = updateStatus(code!, undefined, "verify-source", "done", "보호자", 1, now);
-    expect(replayed).toContain("버전: 2");
+    expect(updateStatus(code!, undefined, "verify-source", "done", "보호자", 1, now)).toContain("result_note");
+    const verified = updateStatus(code!, undefined, "verify-source", "done", "보호자", 1, now, "공식 배송 앱에서 해당 요청이 없음을 확인");
+    expect(verified).toContain("업데이트용 버전: 2");
+    const replayed = updateStatus(code!, undefined, "verify-source", "done", "보호자", 1, now, "공식 배송 앱에서 해당 요청이 없음을 확인");
+    expect(replayed).toContain("업데이트용 버전: 2");
     const stale = updateStatus(code!, undefined, "a1", "done", "보호자", 1, now);
     expect(stale).toContain("먼저 케이스를 수정");
 
@@ -59,6 +60,39 @@ describe("guarded case workflow", () => {
     const card = store.get(code)!;
     expect(card.actionItems.find((item) => item.id === "a1")?.history).toHaveLength(20);
     expect(card.events).toHaveLength(50);
+    deleteCase(code);
+  });
+
+  it("retains a privacy-redacted confirmation result and closes the matching information gap", () => {
+    const now = new Date();
+    const inspection = JSON.parse(inspectNotice({ raw_text: hospital }, now));
+    const code = cardCodeFrom(createCase(inspection.inspection_token, true, now))!;
+    const initial = store.get(code)!;
+    const medication = initial.actionItems.find((item) => item.fieldKey === "medication_allowed")!;
+    const initialPrivacyCount = initial.privacySummary.total;
+
+    expect(updateStatus(code, undefined, medication.id, "done", "보호자", 1, now)).toContain("result_note");
+    const rawResult = "병원 확인: 김민수님은 혈압약 복용 가능, 연락처 010-1234-5678";
+    const updated = updateStatus(code, undefined, medication.id, "done", "보호자", 1, now, rawResult);
+    expect(updated).toContain("확인 결과: 병원 확인: 김○○님은 혈압약 복용 가능, 연락처 [전화번호 숨김]");
+    expect(updated).not.toContain("김민수");
+    expect(updated).not.toContain("010-1234-5678");
+
+    const stored = store.get(code)!;
+    expect(stored.version).toBe(2);
+    expect(stored.privacySummary.total).toBeGreaterThan(initialPrivacyCount);
+    expect(stored.actionItems.find((item) => item.id === medication.id)).toEqual(expect.objectContaining({
+      status: "done",
+      actorName: "보호자",
+      resultNote: "병원 확인: 김○○님은 혈압약 복용 가능, 연락처 [전화번호 숨김]",
+    }));
+    const missingSection = updated.split("아직 비어 있는 내용")[1]?.split("할 일과 현재 상태")[0] ?? "";
+    expect(missingSection).not.toContain("평소 약 복용 가능 여부");
+    expect(familyMessage(code, "family_room", "plain")).toContain("확인 결과: 병원 확인");
+
+    const replay = updateStatus(code, undefined, medication.id, "done", undefined, 1, now, rawResult);
+    expect(replay).toContain("업데이트용 버전: 2");
+    expect(store.get(code)?.privacySummary.total).toBe(stored.privacySummary.total);
     deleteCase(code);
   });
 

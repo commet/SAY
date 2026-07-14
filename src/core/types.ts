@@ -23,6 +23,7 @@ export interface ClassificationAssessment {
   margin: number;
   matchedSignals: string[];
   alternatives: { type: NoticeType; score: number }[];
+  confirmedByUser?: boolean;
 }
 export interface CaseEvent { at: string; type: "created" | "status_changed" | "action_updated" | "outcome_recorded"; detail: string; }
 export interface OutcomeFeedback {
@@ -53,7 +54,7 @@ export interface FeedbackSummary {
 
 export interface Fact { fieldKey: string; label: string; value: string; confidence: Confidence; quote?: string; }
 export interface MissingField { fieldKey: string; label: string; whyItMatters: string; suggestedQuestion: string; }
-export interface ActionItem { id: string; label: string; kind: ActionKind; priority: 1 | 2 | 3; dependsOn?: string[]; dueAt?: string; status: ItemStatus; actorName?: string; history: { at: string; status: ItemStatus; actorName?: string }[]; }
+export interface ActionItem { id: string; fieldKey?: string; label: string; kind: ActionKind; priority: 1 | 2 | 3; dependsOn?: string[]; dueAt?: string; status: ItemStatus; actorName?: string; resultNote?: string; history: { at: string; status: ItemStatus; actorName?: string }[]; }
 export interface RiskSignal { ruleId: string; label: string; severity: "low" | "medium" | "high"; evidence: string; saferNextStep: string; }
 export interface NoticeCard {
   code: string; noticeType: NoticeType; title: string; facts: Fact[]; actionItems: ActionItem[];
@@ -61,7 +62,6 @@ export interface NoticeCard {
   status: CaseStatus; version: number; privacySummary: PrivacySummary; sourceAssessment: SourceAssessment;
   classification: ClassificationAssessment; events: CaseEvent[];
   outcomeFeedback?: OutcomeFeedback;
-  reminderSuggestions: { atLabel: string; text: string }[]; nextCheckAt?: string;
+  reminderSuggestions: { fieldKey?: string; atLabel: string; text: string }[]; nextCheckAt?: string;
   createdAt: string; expiresAt: string; lastAccessAt: string;
 }
-export interface ExtractedInput { field_key: string; value: string; quote?: string; }

@@ -9,7 +9,12 @@ const asks: Record<Audience, Record<Style, string>> = {
   family_room: { short: "확인 가능한 사람이 알려 주세요.", plain: "확인이 필요한 항목을 맡을 수 있는 사람이 답해 주세요.", question: "이 중 확인 가능한 항목이 있으면 알려줄래요?" },
 };
 export function makeMessage(card: NoticeCard, audience: Audience, style: Style): string {
-  const missing = card.missingFields.map((x) => x.label).join(", ") || "남은 할 일";
+  const resolvedFieldKeys = new Set(card.actionItems.filter((item) => item.fieldKey && (item.status === "not_applicable" || (item.status === "done" && item.resultNote))).map((item) => item.fieldKey));
+  const unresolved = card.missingFields.filter((field) => !resolvedFieldKeys.has(field.fieldKey));
+  const missing = unresolved.map((x) => x.label).join(", ") || "추가로 확인할 내용 없음";
   const facts = card.facts.filter((x) => x.confidence === "confirmed").slice(0, 3);
-  return `${card.title} 문자가 왔는데, ${missing} 확인이 필요해 보여요.\n${asks[audience][style]}\n\n첨부 요약\n- ${card.title}\n${facts.map((x) => `- ${x.label}: ${x.value}`).join("\n")}\n- 확인 필요: ${missing}\n- 케이스 코드: ${card.code}\n\n이 코드는 케이스를 여는 비밀 열쇠예요. 믿을 수 있는 가족에게만 공유해 주세요.\n\n${HOST_HINT}`;
+  const results = card.actionItems.filter((item) => item.resultNote).slice(0, 3);
+  const resultBlock = results.length ? `\n${results.map((item) => `- 확인 결과: ${item.resultNote}`).join("\n")}` : "";
+  const opening = unresolved.length ? `${card.title} 문자가 왔는데, ${missing} 확인이 필요해 보여요.\n${asks[audience][style]}` : `${card.title} 안내에서 확인한 내용을 공유해요.`;
+  return `${opening}\n\n첨부 요약\n- ${card.title}\n${facts.map((x) => `- ${x.label}: ${x.value}`).join("\n")}${resultBlock}\n- 확인 필요: ${missing}\n- 케이스 코드: ${card.code}\n\n이 코드는 케이스를 여는 비밀 열쇠예요. 믿을 수 있는 가족에게만 공유해 주세요.\n\n${HOST_HINT}`;
 }

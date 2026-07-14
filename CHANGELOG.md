@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.1.0 — 2026-07-14
+
+- Added privacy-redacted confirmation results to action updates so facts learned from hospitals, official apps and family members remain attached to the short-lived case.
+- Required result evidence before closing official-source verification or missing-information actions, while preserving idempotent replay and optimistic concurrency.
+- Changed low-confidence inspection to issue no storage token until the user explicitly confirms the notice type and re-runs the privacy gate.
+- Reduced user-facing card noise by removing internal scores and showing concise classification, source, retention and update information.
+- Anchored preparation and fasting reminders to real KST appointment times and hid reminders after their related actions close.
+- Added stateless HTTP tool-call coverage and a repeatable average/p99 MCP performance release gate.
+- Removed the unused host-extraction path so server-owned deterministic extraction remains the only fact-ingestion boundary.
+
 ## 2.0.0 — 2026-07-13
 
 - Added weighted, explainable classification with confidence, margin, alternatives and low-confidence workflow gates.

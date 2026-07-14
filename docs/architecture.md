@@ -1,4 +1,4 @@
-# SAY 2.0 — Privacy-first family operations agent
+# SAY 2.1 — Privacy-first family operations agent
 
 ## Product thesis
 
@@ -16,7 +16,7 @@ The agent follows a guarded workflow instead of exposing unrelated utilities:
 2. **Confirm** — show the redacted preview, uncertainty, and risk to the user.
 3. **Create** — create a short-lived case only after explicit consent.
 4. **Plan** — compute the safest next action from risk, missing facts, deadlines, and dependencies.
-5. **Coordinate** — let family roles claim or complete actions with optimistic version checks.
+5. **Coordinate** — let family roles claim actions, retain short redacted confirmation results, and complete work with optimistic version checks.
 6. **Close** — delete completed cases immediately or expire them automatically.
 7. **Learn** — accept one voluntary structured outcome, aggregate only unlinkable counters, and propose guarded experiments after repeated evidence.
 
@@ -31,7 +31,7 @@ The MCP host performs conversational reasoning. The server owns deterministic pr
 | `check_scam_signals` | Standalone link/sender/risk check with server-side redaction | None |
 | `get_case` | Retrieve a short-lived case using its bearer code | None |
 | `get_next_action` | Compute one safe next action and explain why | None |
-| `update_action` | Claim, hold or complete an action with optional version precondition | Updates case |
+| `update_action` | Claim, hold or complete an action, optionally retaining a redacted result note, with a version precondition | Updates case |
 | `make_family_message` | Produce a privacy-minimized family message | None |
 | `list_open_cases` | List open work across supplied bearer codes | None |
 | `record_outcome` | Record one voluntary, no-free-text outcome and update unlinkable counters | Updates case and aggregate |
@@ -41,7 +41,8 @@ The MCP host performs conversational reasoning. The server owns deterministic pr
 
 ```text
 inspection (10 min)
-    └─ explicit consent
+    ├─ low confidence ── explicit user type confirmation ── re-inspect
+    └─ explicit storage consent
        └─ needs_confirmation ── safe verification ── ready
                                       │
                                       ▼
@@ -58,6 +59,7 @@ Case status is derived from risk and action state, not accepted blindly from the
 - Raw notice text may enter one request, but is never logged or stored.
 - The inspection cache stores only redacted text and expires after 10 minutes.
 - Case storage is memory-only by default, capped, and expires at a fixed deadline within 24 hours of creation. Reads and updates never extend it.
+- A case may retain a user-supplied confirmation result of at most 240 characters only after server-side redaction; it is never copied into improvement aggregates.
 - Source quotes are not retained.
 - Names become generic family roles.
 - Case codes are random bearer secrets; no case enumeration API exists.
@@ -71,7 +73,7 @@ Case status is derived from risk and action state, not accepted blindly from the
 
 Every extracted fact records a confidence class derived from deterministic evidence rules. Source assessment is deliberately conservative:
 
-Notice classification also returns weighted matched signals, score, margin, alternatives and a high/medium/low confidence. A low-confidence non-unknown classification creates a blocking confirmation action instead of silently pretending certainty.
+Notice classification uses weighted signals internally and returns concise reasons plus high/medium/low confidence. A low-confidence non-unknown classification receives no retention token until the user explicitly confirms the notice type and the host re-runs inspection with that choice.
 
 - `official`: the claimed organization and domain match a maintained registry.
 - `mismatch`: an organization is claimed but a link uses another domain.
@@ -92,6 +94,7 @@ SAY never declares a message genuine solely because a domain looks plausible.
 8. Feedback with fewer than five supporting cases cannot become a runtime-driven improvement candidate.
 9. Persisted state is schema-validated, write-serialized and bounded; action history and case events cannot grow without limit.
 10. Every MCP tool returns both backward-compatible text and a common schema-validated structured result envelope.
+11. Official-source verification and missing-information actions cannot be completed without retaining a short redacted result.
 
 ## Evaluation contract
 

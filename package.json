@@ -1,6 +1,6 @@
 {
   "name": "say-mcp",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "Privacy-first family notice operations agent for PlayMCP",
   "type": "module",
   "main": "dist/index.js",
@@ -12,9 +12,10 @@
     "start": "node dist/index.js",
     "dev": "tsx watch src/index.ts",
     "eval": "tsx eval/run.ts",
+    "perf": "tsx eval/performance.ts",
     "improve": "tsx improve/run.ts",
     "improve:ingest": "tsx improve/ingest.ts",
-    "quality": "npm run build && npm test && npm run eval && npm audit --omit=dev --audit-level=low && npm audit --audit-level=high && npm run improve",
+    "quality": "npm run build && npm test && npm run eval && npm run perf && npm audit --omit=dev --audit-level=low && npm audit --audit-level=high && npm run improve",
     "test": "vitest run",
     "test:watch": "vitest"
   },
