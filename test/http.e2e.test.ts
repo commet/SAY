@@ -26,7 +26,7 @@ describe("Streamable HTTP boundary", () => {
     expect(createApp().get("trust proxy")).toBe(false);
     const response = await fetch(`${origin}/health`);
     await expect(response.json()).resolves.toEqual(expect.objectContaining({
-      ok: true, name: "say-family-notice", version: "2.1.0",
+      ok: true, name: "say-family-notice", version: "2.1.1",
       privacy: { raw_notice_logging: false, maximum_case_retention_hours: 24 },
       metrics: { mcpRequests: 0, rejectedRequests: 0, rateLimitedRequests: 0 },
     }));
@@ -46,7 +46,7 @@ describe("Streamable HTTP boundary", () => {
     expect(response.status).toBe(200);
     const body = await response.json() as { result: { protocolVersion: string; serverInfo: { name: string; version: string } } };
     expect(body.result.protocolVersion).toBe(protocolVersion);
-    expect(body.result.serverInfo).toEqual({ name: "SAY", version: "2.1.0" });
+    expect(body.result.serverInfo).toEqual({ name: "SAY", version: "2.1.1" });
     expect(response.headers.get("ratelimit-limit")).toBe("60");
     expect(response.headers.get("ratelimit-reset")).toBeTruthy();
   });

@@ -16,7 +16,7 @@ describe("MCP protocol E2E", () => {
     await client.connect(clientTransport);
     cleanups.push(async () => { await client.close(); await server.close(); });
 
-    expect(client.getServerVersion()).toEqual(expect.objectContaining({ name: "SAY", version: "2.1.0" }));
+    expect(client.getServerVersion()).toEqual(expect.objectContaining({ name: "SAY", version: "2.1.1" }));
     const tools = await client.listTools();
     expect(tools.tools.map((tool) => tool.name)).toEqual([
       "inspect_notice", "create_case", "check_scam_signals", "get_case", "get_next_action",
@@ -26,7 +26,7 @@ describe("MCP protocol E2E", () => {
     expect(tools.tools.length).toBeLessThanOrEqual(10);
     for (const tool of tools.tools) {
       expect(tool.name).not.toMatch(/kakao/i);
-      expect(tool.description).toContain("SAY(사이)");
+      expect(tool.description).toContain("SAY 가족 안내");
       expect(tool.description!.length).toBeLessThanOrEqual(1024);
       expect(tool.inputSchema).toBeDefined();
       expect(tool.outputSchema).toBeDefined();

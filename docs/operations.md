@@ -4,7 +4,7 @@
 
 1. Confirm the worktree contains only intended changes.
 2. Run `npm ci` and `npm run quality`.
-3. Confirm `/health` reports version `2.1.0`, `raw_notice_logging: false`, and the intended persistence flags.
+3. Confirm `/health` reports version `2.1.1`, `raw_notice_logging: false`, and the intended persistence flags.
 4. Run the MCP smoke path: `initialize → tools/list → inspect_notice → explicit consent → create_case → get_next_action → update_action → delete_case`.
 5. Test one invalid JSON request, one unsupported content type and one PII-heavy notice.
 6. Deploy a new KC server from the reviewed public Git commit. Keep the previous healthy endpoint until the new endpoint passes the smoke path.

@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.1.1 — 2026-07-20
+
+- Added the exact registered service name `SAY 가족 안내` to every MCP tool description, as required by the PlayMCP review policy.
+- Added protocol-level regression coverage so a tool missing the service name cannot pass the release suite.
+
 ## 2.1.0 — 2026-07-14
 
 - Added privacy-redacted confirmation results to action updates so facts learned from hospitals, official apps and family members remain attached to the short-lived case.
